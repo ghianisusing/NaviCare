@@ -1,0 +1,23 @@
+.profile-page h1 {
+  font-size: 1.7rem;
+}
+
+.profile-card {
+  max-width: 480px;
+  padding: 28px 30px;
+  margin-top: 24px;
+}
+
+.alert-success {
+  background: var(--color-primary-tint);
+  color: var(--color-primary-dark);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+.profile-card input:disabled {
+  color: var(--color-ink-muted);
+  background: var(--color-surface-sunken);
+}

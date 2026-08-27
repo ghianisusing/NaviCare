@@ -1,0 +1,88 @@
+.shell {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.shell-header-inner {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--color-primary-dark);
+}
+
+.brand-mark {
+  color: var(--color-primary);
+  display: inline-flex;
+}
+
+.shell-nav {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+}
+
+.shell-nav a {
+  color: var(--color-ink-muted);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 6px 2px;
+  border-bottom: 2px solid transparent;
+}
+
+.shell-nav a.active,
+.shell-nav a:hover {
+  color: var(--color-primary-dark);
+  border-bottom-color: var(--color-accent);
+}
+
+.shell-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.shell-username {
+  font-size: 0.88rem;
+  color: var(--color-ink-muted);
+}
+
+.shell-main {
+  flex: 1;
+  max-width: 1040px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+@media (max-width: 640px) {
+  .shell-header-inner {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .shell-nav {
+    order: 3;
+    width: 100%;
+  }
+}
