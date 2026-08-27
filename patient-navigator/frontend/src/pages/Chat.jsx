@@ -4,6 +4,49 @@ import { getConversation, sendMessage } from '../api/conversations'
 import { extractErrorMessage } from '../api/client'
 import './chat.css'
 
+const URGENCY_LABELS = {
+  emergency: 'Urgent Medical Attention',
+  urgent: 'Prompt Medical Attention Recommended',
+}
+
+function MessageBubble({ message }) {
+  const urgency = message.urgency
+  const isFlagged = urgency === 'emergency' || urgency === 'urgent'
+
+  return (
+    <div className={`chat-bubble-row ${message.role}`}>
+      <div className={`chat-bubble ${message.role} ${isFlagged ? `chat-bubble-${urgency}` : ''}`}>
+        {isFlagged && (
+          <div className="chat-urgency-banner">
+            <span aria-hidden="true">⚠️</span> {URGENCY_LABELS[urgency]}
+          </div>
+        )}
+        <p className="chat-bubble-text">{message.content}</p>
+
+        {message.sources && message.sources.length > 0 && (
+          <div className="chat-sources">
+            <div className="chat-sources-label">Sources</div>
+            <ul>
+              {message.sources.map((source, index) => (
+                <li key={index}>
+                  {source.source_url ? (
+                    <a href={source.source_url} target="_blank" rel="noreferrer">
+                      {source.title}
+                    </a>
+                  ) : (
+                    <span>{source.title}</span>
+                  )}
+                  {source.source && <span className="chat-source-publisher"> — {source.source}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Chat() {
   const { conversationId } = useParams()
   const navigate = useNavigate()
@@ -90,7 +133,7 @@ export default function Chat() {
           ←
         </button>
         <div>
-          <h1>Patient Navigator</h1>
+          <h1>NaviCare</h1>
           <p className="chat-status">
             <span className="status-dot" aria-hidden="true" />
             Online
@@ -99,7 +142,8 @@ export default function Chat() {
       </div>
 
       <p className="chat-intro">
-        I'm here to help you navigate your healthcare needs and figure out what to do next.
+        Your Patient Navigator. I can help you understand general healthcare information, navigate
+        healthcare services, and figure out what kind of help you may need.
       </p>
 
       {error && (
@@ -122,16 +166,11 @@ export default function Chat() {
           </div>
         )}
 
-        {!loading &&
-          messages.map((message) => (
-            <div key={message.id} className={`chat-bubble-row ${message.role}`}>
-              <div className={`chat-bubble ${message.role}`}>{message.content}</div>
-            </div>
-          ))}
+        {!loading && messages.map((message) => <MessageBubble key={message.id} message={message} />)}
 
         {sending && (
           <div className="chat-bubble-row assistant">
-            <div className="chat-bubble assistant chat-typing" aria-label="Patient Navigator is typing">
+            <div className="chat-bubble assistant chat-typing" aria-label="NaviCare is typing">
               <span />
               <span />
               <span />

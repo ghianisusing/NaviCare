@@ -2,10 +2,13 @@
 Chat Service — sits between the API views and the Navigator Agent.
 
 Views call into this module only; they never construct Message objects
-or talk to the agent layer directly. As of Phase 2 this delegates to
+or talk to the agent layer directly. This delegates to
 `agents.navigator.service`, which runs the LLM-backed Navigator Agent,
-safety validation, and routing — but that's an implementation detail
-this module (and the view above it) doesn't need to know about.
+safety validation, and — as of Phase 3 — routing to the Information and
+Triage agents. `urgency`/`sources` from the resulting turn are persisted
+onto the assistant Message so the frontend can render them (e.g. a
+sources list or an emergency banner) without knowing anything about the
+agent layer itself.
 """
 
 from django.db import transaction
@@ -35,6 +38,8 @@ def send_message(*, conversation: Conversation, content: str) -> Message:
             conversation=conversation,
             role=Message.Role.ASSISTANT,
             content=turn_result.response_text,
+            urgency=turn_result.display_urgency,
+            sources=turn_result.sources,
         )
 
         # Touch conversation.updated_at and give untitled conversations a

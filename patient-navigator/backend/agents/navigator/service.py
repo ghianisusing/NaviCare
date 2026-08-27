@@ -2,12 +2,13 @@
 Navigator Service — the single entry point the rest of the backend
 (specifically `conversations/services/chat_service.py`) calls into.
 
-Responsible for:
-  - running the Navigator Agent
-  - applying safety validation
-  - handling the "route to an agent that doesn't exist yet" case
-  - falling back safely on any agent-layer failure
-  - basic, privacy-conscious logging
+As of Phase 3, this is the orchestrator described in the architecture
+diagram: it runs a deterministic emergency pre-check before doing
+anything else, then — for non-emergency turns — runs the Navigator
+Agent to classify intent and routes GENERAL_HEALTH_INFORMATION to the
+Information Agent (RAG) and SYMPTOM_CONCERN to the Triage Agent. Routes
+to agents that still don't exist (appointment, follow_up) get a
+temporary "being prepared" response, same as Phase 2.
 
 Nothing here touches the database directly except reading/writing
 `conversation.summary` — Message persistence stays in chat_service.py,
@@ -18,9 +19,12 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass, field
 
 from agents.core.exceptions import AgentError, InvalidAgentOutputError
 from agents.core.llm import LLMMessage, get_llm_provider
+from agents.information.service import handle_information_request
+from agents.triage.service import handle_symptom_concern
 
 from . import safety
 from .agent import run_navigator
@@ -41,15 +45,11 @@ FALLBACK_INVALID_OUTPUT_RESPONSE = (
     "The assistant encountered an unexpected problem. Please try again."
 )
 
-# Temporary responses for intents that route to agents that don't exist
-# yet (Phase 3+). Keyed by target_agent.
+# Temporary responses for intents that route to agents that still don't
+# exist (appointment/follow-up are Phase 4+). Information and Triage
+# are real as of Phase 3 and are handled by _route_to_specialist below,
+# not this table.
 AGENT_NOT_READY_RESPONSES = {
-    "information": (
-        "I can tell this is a general health information question. That "
-        "capability is still being prepared, so I can't give a detailed "
-        "answer yet — but I can help you figure out where to go for it "
-        "in the meantime."
-    ),
     "appointment": (
         "Appointment scheduling is still being prepared. I can help you "
         "think through what kind of provider or service you're looking "
@@ -60,21 +60,19 @@ AGENT_NOT_READY_RESPONSES = {
         "prepared. For now, your care team or patient portal is the "
         "fastest way to get that information."
     ),
-    "triage": (
-        "That's still being prepared. Let's talk through what's going "
-        "on so I can point you in the right direction."
-    ),
 }
 
 
+@dataclass
 class NavigatorTurnResult:
     """Everything chat_service.py needs to persist and log one turn."""
 
-    def __init__(self, *, response_text: str, agent_output: AgentOutput, latency_seconds: float, succeeded: bool):
-        self.response_text = response_text
-        self.agent_output = agent_output
-        self.latency_seconds = latency_seconds
-        self.succeeded = succeeded
+    response_text: str
+    agent_output: AgentOutput
+    latency_seconds: float
+    succeeded: bool
+    sources: list[dict] = field(default_factory=list)
+    display_urgency: str = "normal"
 
 
 def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTurnResult:
@@ -86,26 +84,42 @@ def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTu
     """
     started_at = time.monotonic()
 
+    # Deterministic emergency pre-check, before the Navigator Agent (or
+    # any specialist) is even invoked. Per the Phase 3 principle "do not
+    # continue asking unnecessary questions once an emergency condition
+    # has been identified" — this stops normal navigation outright
+    # rather than routing through an LLM call first.
+    if safety.matches_emergency_pattern(patient_message):
+        agent_output = _emergency_output()
+        result = NavigatorTurnResult(
+            response_text=agent_output.response,
+            agent_output=agent_output,
+            latency_seconds=time.monotonic() - started_at,
+            succeeded=True,
+            sources=[],
+            display_urgency="emergency",
+        )
+        _log_turn(conversation=conversation, agent_output=agent_output, succeeded=True, latency_seconds=result.latency_seconds)
+        return result
+
     try:
         agent_output = run_navigator(conversation=conversation, patient_message=patient_message)
         agent_output = safety.apply_safety_validation(agent_output=agent_output, patient_message=patient_message)
-        response_text = _resolve_response_text(agent_output)
+        response_text, sources, display_urgency = _route(
+            conversation=conversation, agent_output=agent_output, patient_message=patient_message
+        )
         succeeded = True
     except AgentError as exc:
         agent_output = _fallback_output_for(exc, patient_message=patient_message)
         response_text = agent_output.response
+        sources = []
+        display_urgency = agent_output.urgency if agent_output.urgency != "unknown" else "normal"
         succeeded = False
         logger.warning("Navigator agent failed (%s): %s", type(exc).__name__, exc)
 
     latency_seconds = time.monotonic() - started_at
 
-    _log_turn(
-        conversation=conversation,
-        agent_output=agent_output,
-        succeeded=succeeded,
-        latency_seconds=latency_seconds,
-    )
-
+    _log_turn(conversation=conversation, agent_output=agent_output, succeeded=succeeded, latency_seconds=latency_seconds)
     _maybe_update_summary(conversation=conversation, patient_message=patient_message, response_text=response_text)
 
     return NavigatorTurnResult(
@@ -113,30 +127,47 @@ def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTu
         agent_output=agent_output,
         latency_seconds=latency_seconds,
         succeeded=succeeded,
+        sources=sources,
+        display_urgency=display_urgency,
     )
 
 
-def _resolve_response_text(agent_output: AgentOutput) -> str:
-    """Substitutes the "not ready yet" message for routes to agents that
-    don't exist yet (Phase 2 has no Information/Appointment/etc. agent
-    to actually invoke)."""
+def _route(*, conversation, agent_output: AgentOutput, patient_message: str) -> tuple[str, list[dict], str]:
+    """Resolve the final (response_text, sources, display_urgency) for a
+    non-emergency Navigator turn, dispatching to a specialist agent when
+    the intent/routing calls for one."""
+    if agent_output.intent == "GENERAL_HEALTH_INFORMATION":
+        info_result = handle_information_request(conversation=conversation, question=patient_message)
+        return info_result.response_text, info_result.sources, "normal"
+
+    if agent_output.intent == "SYMPTOM_CONCERN":
+        triage_result = handle_symptom_concern(conversation=conversation, patient_message=patient_message)
+        display_urgency = triage_result.urgency if triage_result.urgency != "unknown" else "normal"
+        return triage_result.response_text, [], display_urgency
+
     if agent_output.recommended_action == "ROUTE_TO_AGENT" and agent_output.target_agent in AGENT_NOT_READY_RESPONSES:
-        return AGENT_NOT_READY_RESPONSES[agent_output.target_agent]
-    return agent_output.response
+        return AGENT_NOT_READY_RESPONSES[agent_output.target_agent], [], "normal"
+
+    return agent_output.response, [], "normal"
+
+
+def _emergency_output() -> AgentOutput:
+    return AgentOutput(
+        intent="EMERGENCY_CONCERN",
+        urgency="emergency",
+        needs_clarification=False,
+        recommended_action="ESCALATE",
+        response=safety.SAFETY_RESPONSE,
+        clarifying_question=None,
+        target_agent="escalation",
+    )
 
 
 def _fallback_output_for(exc: AgentError, *, patient_message: str) -> AgentOutput:
     # Even on total agent failure, the deterministic safety check still
     # runs — an LLM outage must never suppress an emergency response.
     if safety.matches_emergency_pattern(patient_message):
-        return AgentOutput(
-            intent="EMERGENCY_CONCERN",
-            urgency="emergency",
-            needs_clarification=False,
-            recommended_action="ESCALATE",
-            response=safety.SAFETY_RESPONSE,
-            target_agent="escalation",
-        )
+        return _emergency_output()
 
     message = (
         FALLBACK_INVALID_OUTPUT_RESPONSE
@@ -154,7 +185,7 @@ def _fallback_output_for(exc: AgentError, *, patient_message: str) -> AgentOutpu
 
 
 def _log_turn(*, conversation, agent_output: AgentOutput, succeeded: bool, latency_seconds: float) -> None:
-    # Structured, patient-content-free logging per Phase 2 spec: no
+    # Structured, patient-content-free logging per Phase 2/3 spec: no
     # message text, no API keys, just enough to observe agent behavior.
     logger.info(
         "navigator_turn",

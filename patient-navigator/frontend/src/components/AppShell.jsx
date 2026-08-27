@@ -28,7 +28,7 @@ export default function AppShell() {
                 <circle cx="12" cy="12" r="3.2" fill="currentColor" />
               </svg>
             </span>
-            Patient Navigator
+            NaviCare
           </div>
           <nav className="shell-nav">
             <NavLink to="/dashboard" className={({ isActive }) => (isActive ? 'active' : '')}>

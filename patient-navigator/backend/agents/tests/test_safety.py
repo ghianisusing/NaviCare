@@ -1,4 +1,4 @@
-from django.test import SimpleTestCase
+from django.test import TestCase
 
 from agents.navigator.safety import SAFETY_RESPONSE, apply_safety_validation, matches_emergency_pattern
 from agents.navigator.schemas import AgentOutput
@@ -18,7 +18,7 @@ def _normal_output(**overrides):
     return AgentOutput(**defaults)
 
 
-class MatchesEmergencyPatternTests(SimpleTestCase):
+class MatchesEmergencyPatternTests(TestCase):
     def test_chest_pain_matches(self):
         self.assertTrue(matches_emergency_pattern("I've been having chest pain and trouble breathing."))
 
@@ -32,7 +32,7 @@ class MatchesEmergencyPatternTests(SimpleTestCase):
         self.assertFalse(matches_emergency_pattern("I need to see a dermatologist."))
 
 
-class ApplySafetyValidationTests(SimpleTestCase):
+class ApplySafetyValidationTests(TestCase):
     def test_normal_output_passes_through_unchanged(self):
         output = _normal_output()
         result = apply_safety_validation(agent_output=output, patient_message="What does blood pressure mean?")

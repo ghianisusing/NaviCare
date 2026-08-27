@@ -37,7 +37,7 @@ export default function Login() {
             <path d="M12 2 L12 22 M4 12 L20 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.35" />
             <circle cx="12" cy="12" r="3.2" fill="currentColor" />
           </svg>
-          <span>Patient Navigator</span>
+          <span>NaviCare</span>
         </div>
         <h1>Welcome back</h1>
         <p className="auth-subtitle">Log in to continue your healthcare journey.</p>

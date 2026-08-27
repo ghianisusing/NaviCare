@@ -33,6 +33,15 @@ class Message(models.Model):
     role = models.CharField(max_length=16, choices=Role.choices)
     content = models.TextField()
 
+    # Populated only for assistant messages. `urgency` mirrors the
+    # safety hierarchy (informational/normal, routine, urgent,
+    # emergency) so the frontend can style a message appropriately, e.g.
+    # an emergency banner — see agents/navigator/service.py for where
+    # these are set. `sources` holds the (deterministically retrieved,
+    # never LLM-invented) citations for Information Agent answers.
+    urgency = models.CharField(max_length=16, blank=True, default="")
+    sources = models.JSONField(blank=True, default=list)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

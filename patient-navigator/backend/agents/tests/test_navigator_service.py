@@ -6,20 +6,22 @@ from django.test import TestCase
 
 from agents.core.exceptions import LLMResponseError, LLMUnavailableError
 from agents.core.llm import LLMResult
+from agents.information.service import InformationTurnResult
 from agents.navigator import service as navigator_service
+from agents.triage.service import TriageTurnResult
 from conversations.models import Conversation
 from patients.models import Patient
 
 
 def _payload(**overrides):
     defaults = dict(
-        intent="GENERAL_HEALTH_INFORMATION",
+        intent="GENERAL_NAVIGATION",
         urgency="normal",
         needs_clarification=False,
         clarifying_question=None,
         recommended_action="RESPOND",
         target_agent=None,
-        response="A fasting blood test checks your levels after not eating for a while.",
+        response="I can help you figure out your next steps.",
     )
     defaults.update(overrides)
     return json.dumps(defaults)
@@ -49,12 +51,12 @@ class HandlePatientMessageTests(TestCase):
         mock_get_provider.return_value = FakeProvider(text=_payload())
 
         result = navigator_service.handle_patient_message(
-            conversation=self.conversation, patient_message="What does a fasting blood test mean?"
+            conversation=self.conversation, patient_message="I don't know what department I need."
         )
 
         self.assertTrue(result.succeeded)
-        self.assertIn("fasting blood test", result.response_text)
-        self.assertEqual(result.agent_output.intent, "GENERAL_HEALTH_INFORMATION")
+        self.assertIn("next steps", result.response_text)
+        self.assertEqual(result.agent_output.intent, "GENERAL_NAVIGATION")
 
     @mock.patch("agents.navigator.agent.get_llm_provider")
     def test_emergency_intent_uses_fixed_safety_response(self, mock_get_provider):
@@ -70,10 +72,21 @@ class HandlePatientMessageTests(TestCase):
         self.assertEqual(result.agent_output.recommended_action, "ESCALATE")
         self.assertIn("urgent medical attention", result.response_text)
 
+    def test_emergency_pre_check_skips_navigator_llm_entirely(self):
+        # No mock provider set up at all — if the Navigator LLM were called,
+        # this would raise (LLM_API_KEY unset in tests). The pre-check
+        # should short-circuit before that ever happens.
+        result = navigator_service.handle_patient_message(
+            conversation=self.conversation, patient_message="I have severe chest pain and can't breathe."
+        )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(result.agent_output.recommended_action, "ESCALATE")
+        self.assertIn("urgent medical attention", result.response_text)
+
     @mock.patch("agents.navigator.agent.get_llm_provider")
     def test_deterministic_safety_overrides_bad_agent_classification(self, mock_get_provider):
         # Agent wrongly says "normal" for an emergency-sounding message —
-        # the safety layer must still catch it.
+        # the pre-check should catch it before the LLM is even asked.
         mock_get_provider.return_value = FakeProvider(text=_payload(urgency="normal", intent="UNKNOWN"))
 
         result = navigator_service.handle_patient_message(
@@ -102,7 +115,7 @@ class HandlePatientMessageTests(TestCase):
             conversation=self.conversation, patient_message="Severe chest pain, can't breathe"
         )
 
-        self.assertFalse(result.succeeded)
+        self.assertTrue(result.succeeded)  # caught by the pre-check, never reaches the LLM
         self.assertEqual(result.agent_output.recommended_action, "ESCALATE")
         self.assertIn("urgent medical attention", result.response_text)
 
@@ -144,3 +157,50 @@ class HandlePatientMessageTests(TestCase):
 
         self.assertNotIn("Booking that now", result.response_text)
         self.assertIn("being prepared", result.response_text)
+
+
+class NavigatorRoutingTests(TestCase):
+    """Phase 3: GENERAL_HEALTH_INFORMATION -> information, SYMPTOM_CONCERN -> triage."""
+
+    def setUp(self):
+        user = User.objects.create_user(username="gwen", password="S0meStrongPass!")
+        self.patient = Patient.objects.create(user=user, first_name="Gwen", last_name="Cole")
+        self.conversation = Conversation.objects.create(patient=self.patient)
+
+    @mock.patch("agents.navigator.service.handle_information_request")
+    @mock.patch("agents.navigator.agent.get_llm_provider")
+    def test_general_health_information_routes_to_information_agent(self, mock_get_provider, mock_handle_info):
+        mock_get_provider.return_value = FakeProvider(text=_payload(intent="GENERAL_HEALTH_INFORMATION"))
+        mock_handle_info.return_value = InformationTurnResult(
+            response_text="A blood test measures various things in your blood.",
+            sources=[{"title": "Blood Tests", "source": "Test Source", "source_url": "https://example.com"}],
+            succeeded=True,
+            latency_seconds=0.01,
+        )
+
+        result = navigator_service.handle_patient_message(
+            conversation=self.conversation, patient_message="What is a blood test?"
+        )
+
+        mock_handle_info.assert_called_once()
+        self.assertIn("blood test", result.response_text)
+        self.assertEqual(len(result.sources), 1)
+
+    @mock.patch("agents.navigator.service.handle_symptom_concern")
+    @mock.patch("agents.navigator.agent.get_llm_provider")
+    def test_symptom_concern_routes_to_triage_agent(self, mock_get_provider, mock_handle_triage):
+        mock_get_provider.return_value = FakeProvider(text=_payload(intent="SYMPTOM_CONCERN"))
+        mock_handle_triage.return_value = TriageTurnResult(
+            response_text="How long have you had this cough?",
+            urgency="routine",
+            succeeded=True,
+            latency_seconds=0.01,
+        )
+
+        result = navigator_service.handle_patient_message(
+            conversation=self.conversation, patient_message="I've had a cough for three days."
+        )
+
+        mock_handle_triage.assert_called_once()
+        self.assertIn("cough", result.response_text)
+        self.assertEqual(result.display_urgency, "routine")

@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     "patients",
     "conversations",
     "agents",
+    "knowledge",
+    "safety",
 ]
 
 MIDDLEWARE = [
@@ -176,6 +178,8 @@ LOGGING = {
         # Agent-layer logging is structured and content-free by design —
         # see agents/navigator/service.py — so INFO is safe here.
         "agents": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "safety": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "knowledge": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }
 

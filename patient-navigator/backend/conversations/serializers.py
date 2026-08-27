@@ -6,8 +6,8 @@ from .models import Conversation, Message
 class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
-        fields = ("id", "conversation", "role", "content", "created_at")
-        read_only_fields = ("id", "conversation", "role", "created_at")
+        fields = ("id", "conversation", "role", "content", "urgency", "sources", "created_at")
+        read_only_fields = ("id", "conversation", "role", "urgency", "sources", "created_at")
 
 
 class MessageCreateSerializer(serializers.ModelSerializer):
