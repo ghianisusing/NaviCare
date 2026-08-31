@@ -144,18 +144,18 @@ class HandlePatientMessageTests(TestCase):
     def test_route_to_not_yet_built_agent_uses_temporary_message(self, mock_get_provider):
         mock_get_provider.return_value = FakeProvider(
             text=_payload(
-                intent="APPOINTMENT_REQUEST",
+                intent="LAB_RESULT_FOLLOWUP",
                 recommended_action="ROUTE_TO_AGENT",
-                target_agent="appointment",
-                response="Booking that now!",
+                target_agent="follow_up",
+                response="Pulling that up now!",
             )
         )
 
         result = navigator_service.handle_patient_message(
-            conversation=self.conversation, patient_message="I need to book an appointment."
+            conversation=self.conversation, patient_message="Can you check my lab results?"
         )
 
-        self.assertNotIn("Booking that now", result.response_text)
+        self.assertNotIn("Pulling that up now", result.response_text)
         self.assertIn("being prepared", result.response_text)
 
 
@@ -204,3 +204,60 @@ class NavigatorRoutingTests(TestCase):
         mock_handle_triage.assert_called_once()
         self.assertIn("cough", result.response_text)
         self.assertEqual(result.display_urgency, "routine")
+
+    @mock.patch("agents.navigator.service.handle_appointment_request")
+    @mock.patch("agents.navigator.agent.get_llm_provider")
+    def test_appointment_request_routes_to_appointment_agent(self, mock_get_provider, mock_handle_appointment):
+        from agents.appointment.service import AppointmentTurnResult
+
+        mock_get_provider.return_value = FakeProvider(text=_payload(intent="APPOINTMENT_REQUEST"))
+        mock_handle_appointment.return_value = AppointmentTurnResult(
+            response_text="Let me find a dermatologist for you.",
+            appointment_data={"type": "slot_options", "slots": []},
+            pending_action=None,
+            succeeded=True,
+            latency_seconds=0.01,
+        )
+
+        result = navigator_service.handle_patient_message(
+            conversation=self.conversation, patient_message="I need to see a dermatologist."
+        )
+
+        mock_handle_appointment.assert_called_once()
+        self.assertIn("dermatologist", result.response_text)
+        self.assertEqual(result.appointment_data["type"], "slot_options")
+
+    @mock.patch("agents.navigator.service.handle_appointment_request")
+    @mock.patch("agents.navigator.agent.get_llm_provider")
+    def test_appointment_change_routes_to_appointment_agent(self, mock_get_provider, mock_handle_appointment):
+        from agents.appointment.service import AppointmentTurnResult
+
+        mock_get_provider.return_value = FakeProvider(text=_payload(intent="APPOINTMENT_CHANGE"))
+        mock_handle_appointment.return_value = AppointmentTurnResult(
+            response_text="Which appointment would you like to reschedule?",
+            appointment_data=None,
+            pending_action=None,
+            succeeded=True,
+            latency_seconds=0.01,
+        )
+
+        result = navigator_service.handle_patient_message(
+            conversation=self.conversation, patient_message="I need to move my appointment."
+        )
+
+        mock_handle_appointment.assert_called_once()
+        self.assertIn("reschedule", result.response_text)
+
+    def test_emergency_pre_check_takes_precedence_over_appointment_wording(self):
+        # A message that both requests an appointment AND describes an
+        # emergency must never proceed with routine scheduling — safety
+        # takes precedence over convenience (Phase 4 spec section 19).
+        # No LLM provider mocked at all: if the appointment/navigator
+        # LLM path were reached, this would raise.
+        result = navigator_service.handle_patient_message(
+            conversation=self.conversation,
+            patient_message="I'm having severe chest pain, can you book me an appointment next month?",
+        )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(result.agent_output.recommended_action, "ESCALATE")
+        self.assertIn("urgent medical attention", result.response_text)

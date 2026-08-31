@@ -39,6 +39,71 @@
   color: var(--color-ink);
 }
 
+.appointment-list {
+  list-style: none;
+  margin: 0 0 40px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.appointment-card {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.appointment-department {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-primary);
+  margin-bottom: 2px;
+}
+
+.appointment-provider {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.appointment-time {
+  font-size: 0.88rem;
+  color: var(--color-ink-muted);
+  margin-top: 2px;
+}
+
+.appointment-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.appointment-cancel-btn {
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
+}
+
+.appointment-cancel-btn:hover {
+  background: var(--color-danger-tint);
+}
+
+@media (max-width: 560px) {
+  .appointment-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .appointment-actions {
+    width: 100%;
+  }
+  .appointment-actions .btn {
+    flex: 1;
+  }
+}
+
 .empty-state {
   padding: 24px 26px;
 }

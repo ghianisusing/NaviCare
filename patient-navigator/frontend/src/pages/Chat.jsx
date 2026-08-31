@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getConversation, sendMessage } from '../api/conversations'
+import { confirmAgentAction, declineAgentAction } from '../api/appointments'
 import { extractErrorMessage } from '../api/client'
 import './chat.css'
 
@@ -9,9 +10,123 @@ const URGENCY_LABELS = {
   urgent: 'Prompt Medical Attention Recommended',
 }
 
-function MessageBubble({ message }) {
+function formatDateTime(isoString) {
+  const date = new Date(isoString)
+  return date.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+function SlotOptions({ slots, onSelect, disabled }) {
+  if (!slots || slots.length === 0) {
+    return <p className="chat-appointment-empty">No available appointments matched that request.</p>
+  }
+  return (
+    <div className="chat-slot-list">
+      {slots.map((slot, index) => (
+        <div key={index} className="chat-slot-card">
+          <div>
+            <div className="chat-slot-provider">{slot.provider_name}</div>
+            <div className="chat-slot-department">{slot.department_name}</div>
+            <div className="chat-slot-time">{formatDateTime(slot.start_time)}</div>
+          </div>
+          <button
+            className="btn btn-secondary"
+            disabled={disabled}
+            onClick={() =>
+              onSelect(
+                `Book the appointment with ${slot.provider_name} on ${formatDateTime(slot.start_time)}.`
+              )
+            }
+          >
+            Select
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function AppointmentList({ appointments }) {
+  if (!appointments || appointments.length === 0) {
+    return <p className="chat-appointment-empty">No appointments found.</p>
+  }
+  return (
+    <div className="chat-slot-list">
+      {appointments.map((appointment) => (
+        <div key={appointment.id} className="chat-slot-card">
+          <div>
+            <div className="chat-slot-provider">{appointment.provider_name}</div>
+            <div className="chat-slot-department">{appointment.department_name}</div>
+            <div className="chat-slot-time">
+              {formatDateTime(appointment.start_time)} · {appointment.status}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PendingActionCard({ pendingAction, onSelect, disabled }) {
+  const [resolution, setResolution] = useState(null) // 'confirmed' | 'declined' | error string
+  const [busy, setBusy] = useState(false)
+
+  async function handleConfirm() {
+    setBusy(true)
+    try {
+      await confirmAgentAction(pendingAction.id)
+      setResolution('confirmed')
+    } catch (err) {
+      setResolution(extractErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDecline() {
+    setBusy(true)
+    try {
+      await declineAgentAction(pendingAction.id)
+      setResolution('declined')
+    } catch (err) {
+      setResolution(extractErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (resolution === 'confirmed') {
+    return <div className="chat-pending-resolved chat-pending-confirmed">✓ Done — {pendingAction.summary}</div>
+  }
+  if (resolution === 'declined') {
+    return <div className="chat-pending-resolved">No problem — nothing was changed.</div>
+  }
+
+  return (
+    <div className="chat-pending-card">
+      <div className="chat-pending-summary">{pendingAction.summary}</div>
+      {resolution && <div className="alert-error chat-pending-error">{resolution}</div>}
+      <div className="chat-pending-actions">
+        <button className="btn btn-primary" onClick={handleConfirm} disabled={busy || disabled}>
+          Confirm
+        </button>
+        <button className="btn btn-secondary" onClick={handleDecline} disabled={busy || disabled}>
+          Choose another
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function MessageBubble({ message, onQuickMessage, sending }) {
   const urgency = message.urgency
   const isFlagged = urgency === 'emergency' || urgency === 'urgent'
+  const appointmentData = message.appointment_data
 
   return (
     <div className={`chat-bubble-row ${message.role}`}>
@@ -42,6 +157,13 @@ function MessageBubble({ message }) {
             </ul>
           </div>
         )}
+
+        {appointmentData?.type === 'slot_options' && (
+          <SlotOptions slots={appointmentData.slots} onSelect={onQuickMessage} disabled={sending} />
+        )}
+        {appointmentData?.type === 'appointment_list' && <AppointmentList appointments={appointmentData.appointments} />}
+
+        {message.pending_action && <PendingActionCard pendingAction={message.pending_action} disabled={sending} />}
       </div>
     </div>
   )
@@ -106,19 +228,21 @@ export default function Chat() {
     }
   }
 
-  async function handleSend(event) {
-    event.preventDefault()
-    const content = draft.trim()
+  async function sendComposed(content) {
     if (!content || sending) return
-
-    // Optimistic add of the patient's own message; the assistant reply
-    // is appended once the server responds.
     setMessages((prev) => [
       ...prev,
       { id: `pending-${Date.now()}`, role: 'user', content, created_at: new Date().toISOString() },
     ])
-    setDraft('')
     await deliver(content)
+  }
+
+  async function handleSend(event) {
+    event.preventDefault()
+    const content = draft.trim()
+    if (!content) return
+    setDraft('')
+    await sendComposed(content)
   }
 
   async function handleRetry() {
@@ -143,7 +267,7 @@ export default function Chat() {
 
       <p className="chat-intro">
         Your Patient Navigator. I can help you understand general healthcare information, navigate
-        healthcare services, and figure out what kind of help you may need.
+        healthcare services, find and book appointments, and figure out what kind of help you may need.
       </p>
 
       {error && (
@@ -166,7 +290,10 @@ export default function Chat() {
           </div>
         )}
 
-        {!loading && messages.map((message) => <MessageBubble key={message.id} message={message} />)}
+        {!loading &&
+          messages.map((message) => (
+            <MessageBubble key={message.id} message={message} onQuickMessage={sendComposed} sending={sending} />
+          ))}
 
         {sending && (
           <div className="chat-bubble-row assistant">

@@ -42,6 +42,16 @@ class Message(models.Model):
     urgency = models.CharField(max_length=16, blank=True, default="")
     sources = models.JSONField(blank=True, default=list)
 
+    # Populated only for Appointment Agent turns. `appointment_data`
+    # holds read-only tool results the frontend renders as selectable
+    # cards (slots/appointments/departments/providers — see
+    # agents/appointment/service.py:_build_appointment_data).
+    # `pending_action` references an AgentAction awaiting explicit
+    # patient confirmation via appointments/views.py's confirm/decline
+    # endpoints — never executed just because it was proposed.
+    appointment_data = models.JSONField(blank=True, null=True, default=None)
+    pending_action = models.JSONField(blank=True, null=True, default=None)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -2,13 +2,14 @@
 Navigator Service — the single entry point the rest of the backend
 (specifically `conversations/services/chat_service.py`) calls into.
 
-As of Phase 3, this is the orchestrator described in the architecture
-diagram: it runs a deterministic emergency pre-check before doing
-anything else, then — for non-emergency turns — runs the Navigator
-Agent to classify intent and routes GENERAL_HEALTH_INFORMATION to the
-Information Agent (RAG) and SYMPTOM_CONCERN to the Triage Agent. Routes
-to agents that still don't exist (appointment, follow_up) get a
-temporary "being prepared" response, same as Phase 2.
+This is the orchestrator described in the architecture diagram: it runs
+a deterministic emergency pre-check before doing anything else, then —
+for non-emergency turns — runs the Navigator Agent to classify intent
+and routes GENERAL_HEALTH_INFORMATION to the Information Agent (RAG),
+SYMPTOM_CONCERN to the Triage Agent, and APPOINTMENT_REQUEST /
+APPOINTMENT_CHANGE to the Appointment Agent (tool-calling; see
+agents/appointment/). Routes to agents that still don't exist
+(follow_up) get a temporary "being prepared" response.
 
 Nothing here touches the database directly except reading/writing
 `conversation.summary` — Message persistence stays in chat_service.py,
@@ -23,6 +24,7 @@ from dataclasses import dataclass, field
 
 from agents.core.exceptions import AgentError, InvalidAgentOutputError
 from agents.core.llm import LLMMessage, get_llm_provider
+from agents.appointment.service import handle_appointment_request
 from agents.information.service import handle_information_request
 from agents.triage.service import handle_symptom_concern
 
@@ -46,15 +48,10 @@ FALLBACK_INVALID_OUTPUT_RESPONSE = (
 )
 
 # Temporary responses for intents that route to agents that still don't
-# exist (appointment/follow-up are Phase 4+). Information and Triage
-# are real as of Phase 3 and are handled by _route_to_specialist below,
-# not this table.
+# exist (follow-up is Phase 5+). Information, Triage, and Appointment
+# are real as of Phase 3/4 and are handled by _route below, not this
+# table.
 AGENT_NOT_READY_RESPONSES = {
-    "appointment": (
-        "Appointment scheduling is still being prepared. I can help you "
-        "think through what kind of provider or service you're looking "
-        "for in the meantime."
-    ),
     "follow_up": (
         "Following up on lab results or prior visits is still being "
         "prepared. For now, your care team or patient portal is the "
@@ -73,6 +70,8 @@ class NavigatorTurnResult:
     succeeded: bool
     sources: list[dict] = field(default_factory=list)
     display_urgency: str = "normal"
+    appointment_data: dict | None = None
+    pending_action: dict | None = None
 
 
 def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTurnResult:
@@ -105,7 +104,7 @@ def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTu
     try:
         agent_output = run_navigator(conversation=conversation, patient_message=patient_message)
         agent_output = safety.apply_safety_validation(agent_output=agent_output, patient_message=patient_message)
-        response_text, sources, display_urgency = _route(
+        response_text, sources, display_urgency, appointment_data, pending_action = _route(
             conversation=conversation, agent_output=agent_output, patient_message=patient_message
         )
         succeeded = True
@@ -114,6 +113,8 @@ def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTu
         response_text = agent_output.response
         sources = []
         display_urgency = agent_output.urgency if agent_output.urgency != "unknown" else "normal"
+        appointment_data = None
+        pending_action = None
         succeeded = False
         logger.warning("Navigator agent failed (%s): %s", type(exc).__name__, exc)
 
@@ -129,26 +130,41 @@ def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTu
         succeeded=succeeded,
         sources=sources,
         display_urgency=display_urgency,
+        appointment_data=appointment_data,
+        pending_action=pending_action,
     )
 
 
-def _route(*, conversation, agent_output: AgentOutput, patient_message: str) -> tuple[str, list[dict], str]:
-    """Resolve the final (response_text, sources, display_urgency) for a
-    non-emergency Navigator turn, dispatching to a specialist agent when
-    the intent/routing calls for one."""
+def _route(*, conversation, agent_output: AgentOutput, patient_message: str):
+    """Resolve the final (response_text, sources, display_urgency,
+    appointment_data, pending_action) for a non-emergency Navigator
+    turn, dispatching to a specialist agent when the intent/routing
+    calls for one."""
     if agent_output.intent == "GENERAL_HEALTH_INFORMATION":
         info_result = handle_information_request(conversation=conversation, question=patient_message)
-        return info_result.response_text, info_result.sources, "normal"
+        return info_result.response_text, info_result.sources, "normal", None, None
 
     if agent_output.intent == "SYMPTOM_CONCERN":
         triage_result = handle_symptom_concern(conversation=conversation, patient_message=patient_message)
         display_urgency = triage_result.urgency if triage_result.urgency != "unknown" else "normal"
-        return triage_result.response_text, [], display_urgency
+        return triage_result.response_text, [], display_urgency, None, None
+
+    if agent_output.intent in ("APPOINTMENT_REQUEST", "APPOINTMENT_CHANGE"):
+        appointment_result = handle_appointment_request(
+            conversation=conversation, patient=conversation.patient, patient_message=patient_message
+        )
+        return (
+            appointment_result.response_text,
+            [],
+            "normal",
+            appointment_result.appointment_data,
+            appointment_result.pending_action,
+        )
 
     if agent_output.recommended_action == "ROUTE_TO_AGENT" and agent_output.target_agent in AGENT_NOT_READY_RESPONSES:
-        return AGENT_NOT_READY_RESPONSES[agent_output.target_agent], [], "normal"
+        return AGENT_NOT_READY_RESPONSES[agent_output.target_agent], [], "normal", None, None
 
-    return agent_output.response, [], "normal"
+    return agent_output.response, [], "normal", None, None
 
 
 def _emergency_output() -> AgentOutput:

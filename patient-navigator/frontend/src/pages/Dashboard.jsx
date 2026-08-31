@@ -3,8 +3,20 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getMyProfile } from '../api/patients'
 import { createConversation, listConversations } from '../api/conversations'
+import { cancelAppointment, listAppointments } from '../api/appointments'
 import { extractErrorMessage } from '../api/client'
 import './dashboard.css'
+
+function formatDateTime(isoString) {
+  const date = new Date(isoString)
+  return date.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -12,19 +24,26 @@ export default function Dashboard() {
 
   const [profile, setProfile] = useState(null)
   const [conversations, setConversations] = useState([])
+  const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [startingChat, setStartingChat] = useState(false)
+  const [cancellingId, setCancellingId] = useState(null)
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
       try {
-        const [profileData, conversationData] = await Promise.all([getMyProfile(), listConversations()])
+        const [profileData, conversationData, appointmentData] = await Promise.all([
+          getMyProfile(),
+          listConversations(),
+          listAppointments('scheduled'),
+        ])
         if (!cancelled) {
           setProfile(profileData)
           setConversations(conversationData)
+          setAppointments(appointmentData)
         }
       } catch (err) {
         if (!cancelled) setError(extractErrorMessage(err))
@@ -50,6 +69,19 @@ export default function Dashboard() {
     }
   }
 
+  async function handleCancelAppointment(id) {
+    if (!window.confirm('Cancel this appointment?')) return
+    setCancellingId(id)
+    try {
+      await cancelAppointment(id)
+      setAppointments((prev) => prev.filter((a) => a.id !== id))
+    } catch (err) {
+      setError(extractErrorMessage(err))
+    } finally {
+      setCancellingId(null)
+    }
+  }
+
   const displayName = profile?.first_name || user?.username || 'there'
 
   return (
@@ -68,6 +100,42 @@ export default function Dashboard() {
           {startingChat ? 'Starting…' : 'Start chat'}
         </button>
       </div>
+
+      <section className="recent-section">
+        <h2>Upcoming appointments</h2>
+        {loading && <p className="dashboard-muted">Loading…</p>}
+        {!loading && appointments.length === 0 && (
+          <div className="card empty-state">
+            <p>No upcoming appointments.</p>
+            <p className="dashboard-muted">Ask NaviCare to help you find and book one.</p>
+          </div>
+        )}
+        {!loading && appointments.length > 0 && (
+          <ul className="appointment-list">
+            {appointments.map((appointment) => (
+              <li key={appointment.id} className="card appointment-card">
+                <div>
+                  <div className="appointment-department">{appointment.department_name}</div>
+                  <div className="appointment-provider">{appointment.provider_name}</div>
+                  <div className="appointment-time">{formatDateTime(appointment.start_time)}</div>
+                </div>
+                <div className="appointment-actions">
+                  <button className="btn btn-secondary" onClick={handleStartChat}>
+                    Reschedule
+                  </button>
+                  <button
+                    className="btn btn-secondary appointment-cancel-btn"
+                    onClick={() => handleCancelAppointment(appointment.id)}
+                    disabled={cancellingId === appointment.id}
+                  >
+                    {cancellingId === appointment.id ? 'Cancelling…' : 'Cancel'}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="recent-section">
         <h2>Recent conversations</h2>

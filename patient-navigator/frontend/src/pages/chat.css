@@ -260,3 +260,82 @@
     max-width: 86%;
   }
 }
+
+/* Appointment slot / list cards inside a chat bubble */
+.chat-slot-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-slot-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-slot-provider {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-ink);
+}
+
+.chat-slot-department {
+  font-size: 0.78rem;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.chat-slot-time {
+  font-size: 0.82rem;
+  color: var(--color-ink-muted);
+  margin-top: 2px;
+}
+
+.chat-appointment-empty {
+  margin-top: 10px;
+  font-size: 0.88rem;
+  color: var(--color-ink-muted);
+}
+
+/* Pending agent-action confirmation card */
+.chat-pending-card {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-tint);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+.chat-pending-summary {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--color-ink);
+  margin-bottom: 10px;
+}
+
+.chat-pending-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-pending-error {
+  margin-bottom: 10px;
+}
+
+.chat-pending-resolved {
+  margin-top: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-primary-dark);
+}
+
+.chat-pending-confirmed {
+  color: var(--color-primary-dark);
+}

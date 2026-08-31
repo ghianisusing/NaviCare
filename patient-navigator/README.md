@@ -1,166 +1,165 @@
-# NaviCare — Phase 3: Healthcare Knowledge, Triage & Safety
+# NaviCare — Phase 4: Healthcare Actions, Appointments & Tool Calling
 
-A healthcare patient-portal application with a real, LLM-driven **Navigator
-Agent** that now routes to two specialized agents: an **Information Agent**
-that answers general healthcare questions using retrieval-augmented
-generation over a curated knowledge base, and a **Triage Agent** that
-assesses how urgently a patient's described symptoms may need attention.
-Both sit behind a deterministic, database-backed **Safety** layer that has
-final say over anything that could be an emergency — the LLM helps
-understand and communicate, but never has sole authority over patient
-safety.
+NaviCare's Navigator Agent now takes real, controlled actions. An
+**Appointment Agent**, backed by an explicit tool-calling framework, can
+search departments and providers, find bookable slots, and propose
+booking, cancelling, or rescheduling an appointment — but it can never
+touch the database itself. Every mutating action is validated,
+authorized, and executed by Django, only after the patient explicitly
+confirms it.
 
-## What the project does
+## What's new in Phase 4
 
-A patient can register, log in, view and edit their profile, and start a
-conversation from their dashboard. The Navigator Agent classifies each
-message and routes it:
-
-- **General health questions** ("What is an MRI?") go to the **Information
-  Agent**, which retrieves relevant passages from a curated knowledge base
-  and grounds its answer in them — citing sources, and saying plainly when
-  it doesn't have enough information rather than guessing.
-- **Symptom descriptions** ("I've had a cough for three days") go to the
-  **Triage Agent**, which asks targeted clarifying questions and assesses
-  urgency (routine / urgent / emergency), without ever diagnosing.
-- **Anything that could be an emergency** is caught by a deterministic
-  safety check — independent of the LLM, checked before any agent is even
-  invoked — and gets a fixed, non-LLM-generated response directing the
-  patient to immediate care.
-
-NaviCare does not diagnose, prescribe, or make autonomous medical
-decisions at any point in this phase.
+- **Appointment domain**: `Department`, `Provider`, `Availability`, and
+  `Appointment` models, plus fictional development providers to book
+  against.
+- **A controlled tool registry** (`tools/`): the LLM can only ever
+  request a tool that's registered here — `search_departments`,
+  `search_providers`, `find_available_slots`, `get_patient_appointments`,
+  `book_appointment`, `cancel_appointment`, `reschedule_appointment`.
+  Every argument is validated against a typed schema before it goes
+  anywhere near the database; an unknown tool name or malformed argument
+  is rejected outright.
+- **An Appointment Agent** (`agents/appointment/`) that runs a
+  deliberately *bounded* tool loop — at most two LLM calls per patient
+  turn: one to decide what's needed, and (for read-only lookups only) a
+  second to phrase an answer grounded in the real result, so the agent
+  is never describing data it never actually saw.
+- **Mutating actions are proposals, not actions.** Booking, cancelling,
+  and rescheduling are never executed by the agent — they become a
+  pending, patient-visible `AgentAction` that only becomes real once the
+  patient explicitly confirms it through a dedicated endpoint.
+- **A shared appointment service layer**
+  (`appointments/services/appointment_service.py`) that both the direct
+  REST API and the agent's tools call into — there is exactly one place
+  appointment business logic lives.
+- **Database-enforced double-booking prevention**: a transaction + row
+  lock re-checks availability at booking time, backed by a database
+  `UniqueConstraint` as the final guarantee even under a race.
+- **An appointment dashboard** showing upcoming appointments with
+  cancel/reschedule actions, and a chat UI that renders selectable slot
+  cards, appointment lists, and confirm/decline cards inline.
 
 ## Architecture
 
 ```
-React (Vite)  →  Django REST API  →  Conversation Service  →  PostgreSQL
-                                            ↓
-                                     Navigator Agent
-                                            │
-                          ┌─────────────────┼─────────────────┐
-                          ↓                 ↓                 ↓
-                  Information Agent    Triage Agent    Emergency Concern
-                          │                 │                 │
-                          ↓                 ↓                 ↓
-                   Knowledge Base      Safety Rules      Safety Layer
-                          │                 │                 │
-                          └─────────────────┼─────────────────┘
-                                            ↓
-                                   Final Safety Validation
-                                            ↓
-                                         Response
+                              PATIENT
+                                 │
+                                 ↓
+                          React Frontend
+                                 │
+                                 ↓
+                          Django REST API
+                                 │
+                                 ↓
+                         Conversation Service
+                                 │
+                                 ↓
+                         ┌─────────────────┐
+                         │ Navigator Agent │
+                         └────────┬────────┘
+                                  │
+              ┌───────────────────┼────────────────────┐
+              ↓                   ↓                    ↓
+       Information             Triage            Appointment
+          Agent                Agent                 Agent
+              │                   │                    │
+              ↓                   ↓                    ↓
+             RAG             Safety Rules         Tool Registry
+                                                       │
+                              ┌────────────────────────┼─────────────┐
+                              ↓                        ↓             ↓
+                       Search Providers          Find Slots       Book /
+                                                                Cancel / Reschedule
+                              │                        │             │
+                              └────────────────────────┼─────────────┘
+                                                       ↓
+                                             Appointment Service
+                                                       │
+                                                       ↓
+                                                  PostgreSQL
 ```
 
+**The LLM never has a code path to the database.** It can only ever
+produce a structured tool request (`agents/appointment/schemas.py`),
+which is validated against the tool registry
+(`tools/registry.py` + `tools/schemas.py`) and, for anything that
+mutates data, only ever *proposed* — recorded as a pending `AgentAction`
+— never executed inline. Execution happens exclusively through
+`appointments/services/appointment_service.py`, driven either by a
+patient hitting the confirm endpoint (agent path) or a direct REST call
+(dashboard path). Both paths share the same service layer, so there is
+no appointment business logic duplicated between "the API" and "the
+agent."
+
 ```
-API View (conversations/views.py)
+Patient message
       ↓
-Chat Service (conversations/services/chat_service.py)
+Navigator Agent — classifies intent
+      ↓ APPOINTMENT_REQUEST / APPOINTMENT_CHANGE
+Appointment Agent — decides what tool (if any) is needed
       ↓
-Navigator Service (agents/navigator/service.py)
-      │
-      ├─ Deterministic emergency pre-check (safety/) — runs BEFORE the
-      │  Navigator LLM is even called. A match stops normal navigation
-      │  immediately; nothing below this point runs.
-      │
-      ├─ Navigator Agent (LLM) → intent classification
-      │        │
-      │        ├─ GENERAL_HEALTH_INFORMATION → Information Agent
-      │        │        agents/information/agent.py
-      │        │        → knowledge.retrieval.retrieve() (RAG)
-      │        │        → grounded LLM answer + real sources
-      │        │
-      │        ├─ SYMPTOM_CONCERN → Triage Agent
-      │        │        agents/triage/agent.py
-      │        │        → structured urgency assessment (LLM)
-      │        │        → safety/service.py (escalation-only override)
-      │        │
-      │        └─ everything else → Navigator's own response, or a
-      │                 "being prepared" message for appointment/follow_up
-      │
-      └─ safety.apply_safety_validation() — final backstop before
-         anything reaches the patient
+  read-only tool?                    mutating tool?
+      ↓                                    ↓
+  execute immediately              record as pending AgentAction
+  (search/find/view)               (book/cancel/reschedule) —
+      ↓                            never executed here
+  ground a 2nd LLM call in               ↓
+  the real result                  patient confirms via
+      ↓                            POST .../agent-actions/{id}/confirm/
+  response + selectable                  ↓
+  cards to the patient             appointment_service re-validates
+                                    availability/ownership inside a
+                                    transaction, then executes
 ```
 
-**Safety is deterministic, layered, and escalation-only.** The `safety/`
-app holds a database-backed, versioned `SafetyRule` table (regex triggers →
-severity → fixed response) that an admin can edit without a deploy, plus a
-hardcoded baseline pattern that's checked regardless of database health —
-a DB outage can reduce coverage to the baseline, never to nothing. Every
-place a severity is computed (Navigator's pre-check, Triage's rule
-integration), a rule can only ever *raise* the severity relative to what
-an agent already concluded, never lower it. The final response text for
-an emergency/urgent match is always the rule's fixed text, never
-LLM-generated.
-
-**RAG, not memorized answers.** The Information Agent never answers from
-the LLM's general knowledge. `knowledge/retrieval.py` embeds the question,
-finds the most similar chunks in the curated `HealthcareDocument` corpus,
-and only calls the LLM with that retrieved context attached — if nothing
-clears the similarity threshold, the LLM isn't even called; the patient
-gets a fixed "I don't have enough information" response instead of a
-guess. Sources shown to the patient always come from the retrieval layer,
-never from the LLM's own output, so a citation can never be fabricated.
-
-**Triage confidence stays internal.** The Triage Agent's structured output
-includes a `confidence` score, but it is explicitly never surfaced to the
-patient — not as a percentage, not as a probability — per Phase 3's
-safety principle that a model's confidence must not be mistaken for a
-medical probability.
+**Safety still comes first.** The deterministic emergency pre-check
+(Phase 3) runs on every message before the Navigator Agent is even
+called — a message that both requests an appointment *and* describes a
+possible emergency ("I'm having chest pain, can you book me an
+appointment next month?") is caught there and never reaches the
+Appointment Agent at all. Safety takes precedence over convenience.
 
 ## Technology stack
 
 - **Frontend:** React 19, Vite, React Router, Axios
-- **Backend:** Django 6, Django REST Framework, Simple JWT
-- **Database:** PostgreSQL (via `dj-database-url`; falls back to local SQLite
-  automatically if `DATABASE_URL` isn't set, so the backend and its tests run
-  without a Postgres install)
-- **Auth:** JWT access/refresh tokens (`djangorestframework-simplejwt`), with
-  refresh-token blacklisting on logout
-- **LLM:** Anthropic Messages API, called directly over HTTPS via `requests`
-  behind a small provider abstraction
-- **Retrieval:** a small, dependency-free hashing-trick bag-of-words
-  embedding (`knowledge/embeddings.py`) with in-Python cosine similarity —
-  see "Knowledge base" below for the trade-off and upgrade path
+- **Backend:** Django 6, Django REST Framework
+- **Database:** PostgreSQL (via `dj-database-url`; SQLite-compatible for
+  local dev/tests)
+- **Auth:** JWT (`djangorestframework-simplejwt`)
+- **LLM:** Anthropic Messages API behind a provider abstraction
+  (`agents/core/llm.py`)
+- **Retrieval:** custom chunking + embedding + cosine-similarity pipeline
+  (`knowledge/`)
 
 ## Project structure
 
 ```
 patient-navigator/
 ├── backend/
-│   ├── manage.py
-│   ├── requirements.txt
-│   ├── .env.example
-│   ├── config/                # settings, root urls
-│   ├── users/                  # registration, login, logout, /me
-│   ├── patients/               # Patient model + /api/patients/me/
-│   ├── conversations/          # Conversation/Message models + chat API
-│   │   └── services/            # chat_service.py — API-facing orchestration
-│   ├── agents/
-│   │   ├── core/                 # llm.py, context.py, exceptions.py
-│   │   ├── navigator/            # agent.py, prompts.py, schemas.py,
-│   │   │                         #   safety.py, service.py (orchestrator + router)
-│   │   ├── information/          # RAG-grounded healthcare Q&A — new in Phase 3
-│   │   └── triage/               # symptom urgency assessment — new in Phase 3
-│   ├── knowledge/                # healthcare knowledge base — new in Phase 3
-│   │   ├── models.py              # HealthcareDocument, DocumentChunk
-│   │   ├── chunking.py, embeddings.py, ingestion.py, retrieval.py
-│   │   ├── seed_data.py           # curated dev dataset
-│   │   └── management/commands/  # seed_knowledge_base
-│   ├── safety/                   # deterministic safety rules — new in Phase 3
-│   │   ├── models.py              # SafetyRule
-│   │   ├── rules.py, validator.py, service.py
-│   │   └── management/commands/  # seed_safety_rules
-│   └── core/                    # shared DRF exception handling, permissions
+│   ├── users/, patients/, conversations/    core platform (Phase 1–2)
+│   ├── knowledge/, safety/                  RAG + deterministic safety (Phase 3)
+│   ├── appointments/                        scheduling domain — new in Phase 4
+│   │   ├── models.py                          Department, Provider, Availability,
+│   │   │                                       Appointment, AgentAction
+│   │   ├── services/appointment_service.py    the single source of truth for
+│   │   │                                       appointment business logic
+│   │   ├── views.py, urls.py                  direct REST API + agent-action
+│   │   │                                       confirm/decline endpoints
+│   │   └── management/commands/               seed_appointments
+│   ├── tools/                                 controlled tool-calling framework
+│   │   ├── registry.py, schemas.py             the only way a tool becomes callable
+│   │   └── appointment_tools.py                concrete tool definitions
+│   └── agents/
+│       ├── core/, navigator/, information/, triage/    Phase 2–3
+│       └── appointment/                        new in Phase 4 — bounded tool loop
+│           ├── agent.py, prompts.py, schemas.py, service.py
 │
 └── frontend/
-    ├── .env.example
     └── src/
-        ├── api/               # axios client (JWT + refresh), auth/patients/conversations calls
-        ├── context/           # AuthContext
-        ├── components/        # ProtectedRoute, GuestRoute, AppShell (nav)
-        ├── pages/             # Login, Register, Dashboard, Profile, Chat
-        └── styles/            # design tokens
+        ├── api/appointments.js               appointments + agent-action client
+        ├── pages/Dashboard.jsx                upcoming appointments section
+        └── pages/Chat.jsx                     slot cards, confirm/decline cards
 ```
 
 ## Installation
@@ -173,165 +172,68 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env        # then edit .env — LLM_API_KEY is required for real replies
 python manage.py migrate
-python manage.py seed_safety_rules      # loads the default deterministic safety rules
-python manage.py seed_knowledge_base    # loads + embeds the curated knowledge base
-python manage.py createsuperuser        # needed to manage knowledge docs via /admin/ or the API
+python manage.py seed_safety_rules
+python manage.py seed_knowledge_base
+python manage.py seed_appointments      # fictional departments/providers/availability
+python manage.py createsuperuser
 python manage.py runserver
 ```
-
-The backend serves the API at `http://localhost:8000/api/` and the admin at
-`http://localhost:8000/admin/`. Without `LLM_API_KEY` set, the chat endpoint
-still works end-to-end — every LLM-dependent path has a safe fallback
-message, and the deterministic emergency pre-check still runs regardless.
 
 ### Frontend
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env         # points VITE_API_BASE_URL at the backend
+cp .env.example .env
 npm run dev
 ```
 
-The frontend serves at `http://localhost:5173`.
-
-## Environment variables
-
-**Backend (`backend/.env`)**
-
-| Variable | Purpose |
-|---|---|
-| `SECRET_KEY` | Django secret key — generate a real one for anything beyond local dev |
-| `DEBUG` | `True`/`False` |
-| `ALLOWED_HOSTS` | Comma-separated hostnames |
-| `DATABASE_URL` | Postgres connection string, e.g. `postgres://user:pass@localhost:5432/patient_navigator` |
-| `CORS_ALLOWED_ORIGINS` | Origins allowed to call the API |
-| `CSRF_TRUSTED_ORIGINS` | Origins trusted for CSRF-protected requests |
-| `SECURE_SSL_REDIRECT` | Only relevant when `DEBUG=False` |
-| `LLM_PROVIDER` | Currently only `anthropic` is supported |
-| `LLM_API_KEY` | Anthropic API key — leave blank to run in fallback-only mode |
-| `LLM_MODEL` | Model name, e.g. `claude-sonnet-4-6` |
-| `KNOWLEDGE_CHUNK_SIZE` / `KNOWLEDGE_CHUNK_OVERLAP` | Document chunking (characters) |
-| `EMBEDDING_DIM` | Dimensionality of the local hashing embedding |
-| `KNOWLEDGE_RETRIEVAL_TOP_K` | How many chunks to retrieve per question |
-| `KNOWLEDGE_MIN_SIMILARITY` | Similarity floor below which retrieval returns nothing (triggers the "insufficient information" fallback) |
-
-**Frontend (`frontend/.env`)**
-
-| Variable | Purpose |
-|---|---|
-| `VITE_API_BASE_URL` | Base URL of the Django API, e.g. `http://localhost:8000/api` |
-
-Nothing sensitive is ever committed — both `.env` files are git-ignored, and
-only `.env.example` templates are checked in.
-
-## Running the backend
+## Running tests
 
 ```bash
 cd backend
-python manage.py runserver
-python manage.py test          # run the full test suite (122 tests)
+python manage.py test          # 203 tests
 ```
 
-## Running the frontend
-
-```bash
-cd frontend
-npm run dev      # local dev server
-npm run build    # production build
-```
-
-## API overview
+## API overview (new in Phase 4)
 
 ```
-POST   /api/auth/register/            Create a user + patient profile, returns JWT pair
-POST   /api/auth/login/               Returns JWT pair
-POST   /api/auth/logout/              Blacklists the given refresh token
-POST   /api/auth/token/refresh/       Exchanges a refresh token for a new access token
-GET    /api/auth/me/                  Current user's basic account info
+# Read-only, any authenticated patient
+GET  /api/departments/
+GET  /api/providers/?department=&query=
+GET  /api/appointments/available-slots/?department=&provider=&date=
 
-GET    /api/patients/me/              Current user's patient profile
-PATCH  /api/patients/me/              Update current user's patient profile
+# Direct appointment management — scoped to the requesting patient
+GET    /api/appointments/            list own appointments
+POST   /api/appointments/            book directly (executes immediately)
+GET    /api/appointments/{id}/       retrieve (own only — 404 otherwise)
+PATCH  /api/appointments/{id}/       reschedule (executes immediately)
+DELETE /api/appointments/{id}/       cancel (executes immediately)
 
-GET    /api/conversations/            List the current patient's conversations
-POST   /api/conversations/            Create a conversation
-GET    /api/conversations/{id}/       Conversation detail + messages
-GET    /api/conversations/{id}/messages/    List messages
-POST   /api/conversations/{id}/messages/    Send a message → Navigator Agent → reply
-
-# Admin-only knowledge management (IsAdminUser / is_staff) — patients
-# never access these directly, only indirectly via the Information Agent.
-GET    /api/knowledge/documents/            List healthcare documents
-POST   /api/knowledge/documents/            Create a document (auto-ingests it)
-GET    /api/knowledge/documents/{id}/       Retrieve a document
-PATCH  /api/knowledge/documents/{id}/       Update a document (re-ingests it)
-DELETE /api/knowledge/documents/{id}/       Delete a document
-POST   /api/knowledge/ingest/               Re-chunk and re-embed every document
+# Agent-proposed action confirmation — the only place a chat-proposed
+# booking/cancel/reschedule actually executes
+POST /api/appointments/agent-actions/{id}/confirm/
+POST /api/appointments/agent-actions/{id}/decline/
 ```
 
-The chat endpoint's shape hasn't changed since Phase 1 — the frontend has no
-idea which specialist agent handled a given message. Internally, `POST
-.../messages/` now: saves the patient's message → runs the deterministic
-emergency pre-check → runs the Navigator Agent → routes to the Information
-or Triage agent based on intent → runs final safety validation → persists
-and returns the assistant message, now carrying `urgency` and `sources`
-fields the frontend uses for an emergency banner and a source list.
-
-Every conversation/patient endpoint is scoped to the authenticated user —
-there is no id-based lookup that lets one patient reach another's data.
-Cross-patient access attempts return `404`, matching endpoints resolve `me`
-from the JWT rather than a URL parameter.
-
-Errors are returned as `{"error": "<message>"}`, with `{"error": ..., "details": {...}}`
-for field-level validation failures. Raw exceptions and stack traces are
-never sent to the client; full detail is only ever logged server-side.
-
-## Knowledge base
-
-Seeded via `python manage.py seed_knowledge_base` with 10 curated documents
-covering general health, diagnostic tests, symptoms, preventive care,
-common procedures, and healthcare services — each recording its real
-source (e.g. MedlinePlus, RadiologyInfo.org, USPSTF) rather than an
-invented citation. Documents are chunked (`knowledge/chunking.py`,
-sentence-boundary-aware, configurable size/overlap) and embedded
-(`knowledge/embeddings.py`) on ingestion.
-
-**On the embedding implementation:** this phase uses a small,
-dependency-free hashing-trick bag-of-words embedding rather than a hosted
-embedding API, so ingestion and retrieval work fully offline. It's
-deliberately documented as prototype-grade — appropriate for a small
-curated knowledge base, not a large corpus. `DocumentChunk.embedding` is
-stored as a portable JSON list of floats (not a Postgres-specific vector
-column), so a production deployment can swap in a real embedding model
-behind the same `embed_text(text) -> list[float]` signature, and move
-`knowledge/retrieval.py`'s in-Python cosine similarity scan to an indexed
-vector column (e.g. pgvector) without changing anything upstream of it.
-
-## Safety rules
-
-Seeded via `python manage.py seed_safety_rules` with 9 default rules
-spanning cardiac/respiratory, neurological, bleeding/trauma, mental health
-crisis, and allergic reaction categories, each with a severity
-(`emergency`/`urgent`), a regex trigger, and a fixed response. Rules are
-manageable from `/admin/` (staff-only) — editing or deactivating a rule
-takes effect immediately, no deploy required. See "Architecture" above for
-the escalation-only guarantee that makes this safe to let admins edit
-without re-reviewing the whole safety system each time.
+The chat endpoint (`POST /api/conversations/{id}/messages/`) is
+unchanged in shape from earlier phases, but assistant messages can now
+carry `appointment_data` (selectable slot/appointment/provider cards)
+and `pending_action` (a confirm/decline card) alongside the usual
+`content`, `urgency`, and `sources`.
 
 ## Development roadmap
 
 ```
 Phase 1 — Foundation
 Phase 2 — Navigator Agent
-Phase 3 — Healthcare Knowledge, Triage & Safety      (this repo)
-Phase 4 — Appointments + Tools
+Phase 3 — Healthcare Knowledge, Triage & Safety
+Phase 4 — Healthcare Actions, Appointments & Tool Calling   (this repo)
 Phase 5 — Follow-up + Notifications
 Phase 6 — Safety + Human Escalation
 Phase 7 — Deployment + Monitoring
 ```
 
-Phase 3 deliberately stops short of appointment booking, real hospital
-integrations, medication prescribing, real clinical records, insurance
-processing, or autonomous medical decisions — those are Phase 4+. The
-`appointment` and `follow_up` routing targets remain "being prepared"
-placeholders, same as Phase 2.
+Real hospital/insurance integrations, payment processing, prescription
+ordering, real clinical records, and autonomous treatment decisions
+remain explicitly out of scope.

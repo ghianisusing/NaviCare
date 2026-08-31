@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "agents",
     "knowledge",
     "safety",
+    "appointments",
 ]
 
 MIDDLEWARE = [

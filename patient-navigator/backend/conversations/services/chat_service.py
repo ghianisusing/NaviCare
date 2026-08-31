@@ -40,6 +40,8 @@ def send_message(*, conversation: Conversation, content: str) -> Message:
             content=turn_result.response_text,
             urgency=turn_result.display_urgency,
             sources=turn_result.sources,
+            appointment_data=turn_result.appointment_data,
+            pending_action=turn_result.pending_action,
         )
 
         # Touch conversation.updated_at and give untitled conversations a
