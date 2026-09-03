@@ -10,4 +10,6 @@ urlpatterns = [
     path("api/conversations/", include("conversations.urls")),
     path("api/knowledge/", include("knowledge.urls")),
     path("api/", include("appointments.urls")),
+    path("api/", include("follow_ups.urls")),
+    path("api/", include("notifications.urls")),
 ]

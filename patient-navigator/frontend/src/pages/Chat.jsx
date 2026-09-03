@@ -72,6 +72,47 @@ function AppointmentList({ appointments }) {
   )
 }
 
+function FollowUpList({ followUps }) {
+  if (!followUps || followUps.length === 0) {
+    return <p className="chat-appointment-empty">No follow-ups found.</p>
+  }
+  return (
+    <div className="chat-slot-list">
+      {followUps.map((followUp) => (
+        <div key={followUp.id} className="chat-slot-card">
+          <div>
+            <div className="chat-slot-provider">{followUp.title}</div>
+            <div className="chat-slot-time">
+              {followUp.due_at ? `Due ${formatDateTime(followUp.due_at)} · ` : ''}
+              {followUp.status}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ReminderList({ reminders }) {
+  if (!reminders || reminders.length === 0) {
+    return <p className="chat-appointment-empty">No reminders found.</p>
+  }
+  return (
+    <div className="chat-slot-list">
+      {reminders.map((reminder) => (
+        <div key={reminder.id} className="chat-slot-card">
+          <div>
+            <div className="chat-slot-provider">{reminder.follow_up_title}</div>
+            <div className="chat-slot-time">
+              {formatDateTime(reminder.scheduled_for)} · {reminder.status}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function PendingActionCard({ pendingAction, onSelect, disabled }) {
   const [resolution, setResolution] = useState(null) // 'confirmed' | 'declined' | error string
   const [busy, setBusy] = useState(false)
@@ -127,6 +168,7 @@ function MessageBubble({ message, onQuickMessage, sending }) {
   const urgency = message.urgency
   const isFlagged = urgency === 'emergency' || urgency === 'urgent'
   const appointmentData = message.appointment_data
+  const followUpData = message.follow_up_data
 
   return (
     <div className={`chat-bubble-row ${message.role}`}>
@@ -162,6 +204,9 @@ function MessageBubble({ message, onQuickMessage, sending }) {
           <SlotOptions slots={appointmentData.slots} onSelect={onQuickMessage} disabled={sending} />
         )}
         {appointmentData?.type === 'appointment_list' && <AppointmentList appointments={appointmentData.appointments} />}
+
+        {followUpData?.type === 'follow_up_list' && <FollowUpList followUps={followUpData.follow_ups} />}
+        {followUpData?.type === 'reminder_list' && <ReminderList reminders={followUpData.reminders} />}
 
         {message.pending_action && <PendingActionCard pendingAction={message.pending_action} disabled={sending} />}
       </div>

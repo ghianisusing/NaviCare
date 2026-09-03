@@ -20,6 +20,14 @@ class Patient(models.Model):
     date_of_birth = models.DateField(null=True, blank=True)
     phone_number = models.CharField(max_length=32, blank=True)
 
+    # IANA timezone name (e.g. "America/New_York"). Reminder/follow-up
+    # due times are always stored in UTC (Django's USE_TZ=True default)
+    # but rendered to the patient in this timezone — see
+    # follow_ups/services/follow_up_service.py and the serializers that
+    # format patient-facing datetimes. Defaults to UTC rather than
+    # guessing from request data.
+    timezone = models.CharField(max_length=64, default="UTC")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

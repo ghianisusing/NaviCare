@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { getMyProfile } from '../api/patients'
 import { createConversation, listConversations } from '../api/conversations'
 import { cancelAppointment, listAppointments } from '../api/appointments'
+import { createAppointmentReminder } from '../api/followUps'
 import { extractErrorMessage } from '../api/client'
 import './dashboard.css'
 
@@ -29,6 +30,7 @@ export default function Dashboard() {
   const [error, setError] = useState('')
   const [startingChat, setStartingChat] = useState(false)
   const [cancellingId, setCancellingId] = useState(null)
+  const [reminderState, setReminderState] = useState({}) // appointmentId -> 'busy' | 'done'
 
   useEffect(() => {
     let cancelled = false
@@ -82,6 +84,17 @@ export default function Dashboard() {
     }
   }
 
+  async function handleRemindMe(id) {
+    setReminderState((prev) => ({ ...prev, [id]: 'busy' }))
+    try {
+      await createAppointmentReminder(id)
+      setReminderState((prev) => ({ ...prev, [id]: 'done' }))
+    } catch (err) {
+      setError(extractErrorMessage(err))
+      setReminderState((prev) => ({ ...prev, [id]: undefined }))
+    }
+  }
+
   const displayName = profile?.first_name || user?.username || 'there'
 
   return (
@@ -120,6 +133,17 @@ export default function Dashboard() {
                   <div className="appointment-time">{formatDateTime(appointment.start_time)}</div>
                 </div>
                 <div className="appointment-actions">
+                  {reminderState[appointment.id] === 'done' ? (
+                    <span className="appointment-reminder-set">✓ Reminder set</span>
+                  ) : (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleRemindMe(appointment.id)}
+                      disabled={reminderState[appointment.id] === 'busy'}
+                    >
+                      {reminderState[appointment.id] === 'busy' ? 'Setting…' : 'Remind me'}
+                    </button>
+                  )}
                   <button className="btn btn-secondary" onClick={handleStartChat}>
                     Reschedule
                   </button>

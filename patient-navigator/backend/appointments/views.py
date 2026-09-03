@@ -35,6 +35,12 @@ from .serializers import (
 from .services import appointment_service
 from .services.exceptions import AppointmentError, AppointmentNotFoundError, NotOwnerError, SlotUnavailableError
 
+from follow_ups.services import follow_up_service
+from follow_ups.services.exceptions import FollowUpError, FollowUpNotFoundError
+from follow_ups.services.exceptions import NotOwnerError as FollowUpNotOwnerError
+from follow_ups.services.exceptions import ReminderNotFoundError
+from follow_ups.serializers import FollowUpSerializer, ReminderSerializer
+
 
 class DepartmentListView(generics.ListAPIView):
     """GET /api/departments/ — read-only, any authenticated patient."""
@@ -223,18 +229,18 @@ class AgentActionConfirmView(PatientScopedAppointmentMixin, APIView):
             action.status = AgentAction.Status.FAILED
             action.save(update_fields=["status", "updated_at"])
             return Response({"error": str(exc)}, status=status.HTTP_409_CONFLICT)
-        except (AppointmentNotFoundError, NotOwnerError) as exc:
+        except (AppointmentNotFoundError, NotOwnerError, FollowUpNotFoundError, FollowUpNotOwnerError, ReminderNotFoundError) as exc:
             action.status = AgentAction.Status.FAILED
             action.save(update_fields=["status", "updated_at"])
             return Response({"error": str(exc)}, status=status.HTTP_404_NOT_FOUND)
-        except AppointmentError as exc:
+        except (AppointmentError, FollowUpError) as exc:
             action.status = AgentAction.Status.FAILED
             action.save(update_fields=["status", "updated_at"])
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         action.status = AgentAction.Status.EXECUTED
         action.save(update_fields=["status", "updated_at"])
-        return Response({"action": AgentActionSerializer(action).data, "appointment": AppointmentSerializer(result).data})
+        return Response({"action": AgentActionSerializer(action).data, "result": _serialize_agent_action_result(action, result)})
 
 
 class AgentActionDeclineView(PatientScopedAppointmentMixin, APIView):
@@ -257,10 +263,15 @@ class AgentActionDeclineView(PatientScopedAppointmentMixin, APIView):
         return Response({"action": AgentActionSerializer(action).data})
 
 
-def _execute_agent_action(action: AgentAction) -> Appointment:
+def _execute_agent_action(action: AgentAction):
     """Re-parse the stored (already-validated-shape) arguments and run
     the real, transaction-safe service call — this is where a slot that
-    became unavailable between proposal and confirmation is caught."""
+    became unavailable between proposal and confirmation is caught.
+
+    Dispatches across domains by tool_name — AgentAction is a shared,
+    domain-agnostic audit/confirmation record (appointments and
+    follow-ups both create rows in the same table), so this is the one
+    place that needs to know about both services."""
     from datetime import datetime
 
     args = action.arguments
@@ -282,4 +293,20 @@ def _execute_agent_action(action: AgentAction) -> Appointment:
             new_start_time=datetime.fromisoformat(args["new_start_time"]),
             new_end_time=datetime.fromisoformat(args["new_end_time"]),
         )
+    if action.tool_name == "complete_follow_up":
+        return follow_up_service.complete_follow_up(patient=action.patient, follow_up_id=args["follow_up_id"])
+    if action.tool_name == "cancel_follow_up":
+        return follow_up_service.cancel_follow_up(patient=action.patient, follow_up_id=args["follow_up_id"])
+    if action.tool_name == "cancel_reminder":
+        return follow_up_service.cancel_reminder(patient=action.patient, reminder_id=args["reminder_id"])
     raise AppointmentError("Unsupported action.")
+
+
+def _serialize_agent_action_result(action: AgentAction, result) -> dict:
+    if action.tool_name in ("book_appointment", "cancel_appointment", "reschedule_appointment"):
+        return AppointmentSerializer(result).data
+    if action.tool_name in ("complete_follow_up", "cancel_follow_up"):
+        return FollowUpSerializer(result).data
+    if action.tool_name == "cancel_reminder":
+        return ReminderSerializer(result).data
+    return {}

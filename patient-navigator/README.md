@@ -1,44 +1,46 @@
-# NaviCare — Phase 4: Healthcare Actions, Appointments & Tool Calling
+# NaviCare — Phase 5: Follow-Up, Reminders & Proactive Care Coordination
 
-NaviCare's Navigator Agent now takes real, controlled actions. An
-**Appointment Agent**, backed by an explicit tool-calling framework, can
-search departments and providers, find bookable slots, and propose
-booking, cancelling, or rescheduling an appointment — but it can never
-touch the database itself. Every mutating action is validated,
-authorized, and executed by Django, only after the patient explicitly
-confirms it.
+NaviCare can now act **without a new patient message**. A Follow-Up Agent
+creates navigation tasks and reminders on request, a background worker
+sends notifications when they come due, and the patient sees a persistent
+care-navigation timeline — not just a chat log. This is the shift from a
+request/response chatbot to an agentic system with real, scheduled,
+proactive behavior.
 
-## What's new in Phase 4
+## What's new in Phase 5
 
-- **Appointment domain**: `Department`, `Provider`, `Availability`, and
-  `Appointment` models, plus fictional development providers to book
-  against.
-- **A controlled tool registry** (`tools/`): the LLM can only ever
-  request a tool that's registered here — `search_departments`,
-  `search_providers`, `find_available_slots`, `get_patient_appointments`,
-  `book_appointment`, `cancel_appointment`, `reschedule_appointment`.
-  Every argument is validated against a typed schema before it goes
-  anywhere near the database; an unknown tool name or malformed argument
-  is rejected outright.
-- **An Appointment Agent** (`agents/appointment/`) that runs a
-  deliberately *bounded* tool loop — at most two LLM calls per patient
-  turn: one to decide what's needed, and (for read-only lookups only) a
-  second to phrase an answer grounded in the real result, so the agent
-  is never describing data it never actually saw.
-- **Mutating actions are proposals, not actions.** Booking, cancelling,
-  and rescheduling are never executed by the agent — they become a
-  pending, patient-visible `AgentAction` that only becomes real once the
-  patient explicitly confirms it through a dedicated endpoint.
-- **A shared appointment service layer**
-  (`appointments/services/appointment_service.py`) that both the direct
-  REST API and the agent's tools call into — there is exactly one place
-  appointment business logic lives.
-- **Database-enforced double-booking prevention**: a transaction + row
-  lock re-checks availability at booking time, backed by a database
-  `UniqueConstraint` as the final guarantee even under a race.
-- **An appointment dashboard** showing upcoming appointments with
-  cancel/reschedule actions, and a chat UI that renders selectable slot
-  cards, appointment lists, and confirm/decline cards inline.
+- **A Follow-Up Agent** (`agents/follow_up/`) that creates and manages
+  navigation tasks and reminders — never clinical instructions. Same
+  bounded, max-2-LLM-calls-per-turn design as the Appointment Agent
+  (Phase 4): read-only lookups execute inline and get grounded in a
+  second call; completing or cancelling something is only ever
+  *proposed*, requiring the same explicit confirm/decline flow used for
+  appointments.
+- **`FollowUp` and `Reminder` models**, decoupled from each other — one
+  follow-up can have multiple reminders (e.g. 24 hours before, then 2
+  hours before).
+- **A notification abstraction** (`notifications/`) with an in-app
+  channel implemented and an email channel stubbed to show the
+  extension point, plus a `Notification` model that's the actual
+  in-app inbox.
+- **An idempotent background worker** (`notifications/tasks.py`, run via
+  `manage.py process_reminders`) that sends due reminders and expires
+  overdue follow-ups. Running it twice — or having two overlapping runs
+  — never produces a duplicate notification: each reminder is
+  re-checked under a row lock immediately before being marked sent.
+- **Proactive behavior, demonstrated end-to-end**: book an appointment →
+  offer a reminder → the reminder fires on its own later, with no
+  further patient message, and shows up as a notification.
+- **A patient-facing Follow-Ups page and Notifications inbox**, plus
+  Navigator routing for follow-up/reminder requests made in plain
+  language ("what reminders do I have," "cancel that reminder," "I
+  already did that").
+- **Per-patient timezone** (`Patient.timezone`) so reminder times are
+  never silently assumed to be UTC when shown to the patient, and the
+  Follow-Up Agent normalizes natural-language dates ("tomorrow," "next
+  Friday") against the patient's actual timezone and the current date —
+  the backend still validates the resulting datetime server-side rather
+  than trusting the model's arithmetic blindly.
 
 ## Architecture
 
@@ -46,79 +48,75 @@ confirms it.
                               PATIENT
                                  │
                                  ↓
-                          React Frontend
+                         React Frontend
                                  │
                                  ↓
-                          Django REST API
+                          Django API
                                  │
                                  ↓
-                         Conversation Service
+                        Navigator Agent
                                  │
-                                 ↓
-                         ┌─────────────────┐
-                         │ Navigator Agent │
-                         └────────┬────────┘
-                                  │
-              ┌───────────────────┼────────────────────┐
-              ↓                   ↓                    ↓
-       Information             Triage            Appointment
-          Agent                Agent                 Agent
-              │                   │                    │
-              ↓                   ↓                    ↓
-             RAG             Safety Rules         Tool Registry
-                                                       │
-                              ┌────────────────────────┼─────────────┐
-                              ↓                        ↓             ↓
-                       Search Providers          Find Slots       Book /
-                                                                Cancel / Reschedule
-                              │                        │             │
-                              └────────────────────────┼─────────────┘
-                                                       ↓
-                                             Appointment Service
-                                                       │
-                                                       ↓
-                                                  PostgreSQL
+       ┌─────────────────────────┼────────────────────────┐
+       ↓                         ↓                        ↓
+ Information                  Triage        Appointment / Follow-Up
+    Agent                     Agent               Agents
+       │                         │                        │
+       ↓                         ↓                        ↓
+      RAG                   Safety Rules             Tool Registry
+                                                        │
+                                              Appointment / Follow-Up
+                                                    Service
+                                                        │
+                                                        ↓
+                                                   PostgreSQL
+                                                        ↑
+                                                        │
+                                                 Reminder System
+                                                        │
+                                                        ↓
+                                               Background Worker
+                                              (manage.py process_reminders)
+                                                        │
+                                                        ↓
+                                                 Notifications
+                                                        │
+                                                        ↓
+                                                    Patient
 ```
 
-**The LLM never has a code path to the database.** It can only ever
-produce a structured tool request (`agents/appointment/schemas.py`),
-which is validated against the tool registry
-(`tools/registry.py` + `tools/schemas.py`) and, for anything that
-mutates data, only ever *proposed* — recorded as a pending `AgentAction`
-— never executed inline. Execution happens exclusively through
-`appointments/services/appointment_service.py`, driven either by a
-patient hitting the confirm endpoint (agent path) or a direct REST call
-(dashboard path). Both paths share the same service layer, so there is
-no appointment business logic duplicated between "the API" and "the
-agent."
+**The confirmation pattern generalizes across domains.** `AgentAction` —
+introduced in Phase 4 for appointment proposals — is a domain-agnostic
+audit/pending-confirmation record; the Follow-Up Agent's
+complete/cancel proposals reuse the exact same table and the exact same
+`POST /api/appointments/agent-actions/{id}/confirm|decline/` endpoints as
+appointments do. There is one confirmation mechanism in the system, not
+one per feature.
 
-```
-Patient message
-      ↓
-Navigator Agent — classifies intent
-      ↓ APPOINTMENT_REQUEST / APPOINTMENT_CHANGE
-Appointment Agent — decides what tool (if any) is needed
-      ↓
-  read-only tool?                    mutating tool?
-      ↓                                    ↓
-  execute immediately              record as pending AgentAction
-  (search/find/view)               (book/cancel/reschedule) —
-      ↓                            never executed here
-  ground a 2nd LLM call in               ↓
-  the real result                  patient confirms via
-      ↓                            POST .../agent-actions/{id}/confirm/
-  response + selectable                  ↓
-  cards to the patient             appointment_service re-validates
-                                    availability/ownership inside a
-                                    transaction, then executes
-```
+**Idempotency is structural, not a flag.** A reminder only gets
+processed while its status is `SCHEDULED`, re-checked inside a
+row-locked transaction immediately before the notification is created
+and the status flips to `SENT`. Two overlapping worker runs (or one run
+happening twice) can't both win that race — see
+`notifications/tasks.py:_process_one_reminder`.
 
-**Safety still comes first.** The deterministic emergency pre-check
-(Phase 3) runs on every message before the Navigator Agent is even
-called — a message that both requests an appointment *and* describes a
-possible emergency ("I'm having chest pain, can you book me an
-appointment next month?") is caught there and never reaches the
-Appointment Agent at all. Safety takes precedence over convenience.
+**Background jobs stay administrative.** The worker can create a
+notification, mark a reminder sent, or expire an overdue follow-up. It
+never diagnoses, changes a medication, or makes a clinical decision —
+per the Phase 5 boundary, follow-ups are navigation/administrative
+tasks only.
+
+## No Celery/Redis in this environment
+
+Phase 5 calls for background processing "using Celery + Redis or the
+existing background-task infrastructure if already present." Neither is
+available in this project's environment, so `notifications/tasks.py`
+exposes a plain, idempotent Python function
+(`process_due_reminders`/`run_maintenance_cycle`) invoked by the
+`process_reminders` management command instead. Run it on a schedule
+(cron, a platform's scheduled-job feature, etc.). In a deployment with
+Celery available, this function is exactly what a periodic Celery
+task's body would call — the idempotency and row-locking already
+implemented don't change; only the trigger mechanism would.
 
 ## Technology stack
 
@@ -128,38 +126,38 @@ Appointment Agent at all. Safety takes precedence over convenience.
   local dev/tests)
 - **Auth:** JWT (`djangorestframework-simplejwt`)
 - **LLM:** Anthropic Messages API behind a provider abstraction
-  (`agents/core/llm.py`)
-- **Retrieval:** custom chunking + embedding + cosine-similarity pipeline
-  (`knowledge/`)
+- **Background processing:** idempotent management command (see above)
 
 ## Project structure
 
 ```
 patient-navigator/
 ├── backend/
-│   ├── users/, patients/, conversations/    core platform (Phase 1–2)
-│   ├── knowledge/, safety/                  RAG + deterministic safety (Phase 3)
-│   ├── appointments/                        scheduling domain — new in Phase 4
-│   │   ├── models.py                          Department, Provider, Availability,
-│   │   │                                       Appointment, AgentAction
-│   │   ├── services/appointment_service.py    the single source of truth for
-│   │   │                                       appointment business logic
-│   │   ├── views.py, urls.py                  direct REST API + agent-action
-│   │   │                                       confirm/decline endpoints
-│   │   └── management/commands/               seed_appointments
-│   ├── tools/                                 controlled tool-calling framework
-│   │   ├── registry.py, schemas.py             the only way a tool becomes callable
-│   │   └── appointment_tools.py                concrete tool definitions
+│   ├── users/, patients/, conversations/       core platform (Phase 1–2)
+│   ├── knowledge/, safety/                     RAG + deterministic safety (Phase 3)
+│   ├── appointments/                           scheduling domain (Phase 4)
+│   ├── follow_ups/                              new in Phase 5
+│   │   ├── models.py                              FollowUp, Reminder
+│   │   ├── services/follow_up_service.py           single source of truth
+│   │   ├── views.py, urls.py                       REST API
+│   │   └── management/commands/                   (seed data lives in appointments)
+│   ├── notifications/                           new in Phase 5
+│   │   ├── models.py                              Notification
+│   │   ├── services.py                            channel abstraction (in-app, email stub)
+│   │   ├── tasks.py                                idempotent reminder processing
+│   │   └── management/commands/process_reminders.py
+│   ├── tools/
+│   │   ├── appointment_tools.py                   Phase 4
+│   │   └── follow_up_tools.py                      new in Phase 5
 │   └── agents/
-│       ├── core/, navigator/, information/, triage/    Phase 2–3
-│       └── appointment/                        new in Phase 4 — bounded tool loop
+│       ├── core/, navigator/, information/, triage/, appointment/
+│       └── follow_up/                              new in Phase 5
 │           ├── agent.py, prompts.py, schemas.py, service.py
 │
 └── frontend/
     └── src/
-        ├── api/appointments.js               appointments + agent-action client
-        ├── pages/Dashboard.jsx                upcoming appointments section
-        └── pages/Chat.jsx                     slot cards, confirm/decline cards
+        ├── api/followUps.js, notifications.js    new in Phase 5
+        └── pages/FollowUps.jsx, Notifications.jsx  new in Phase 5
 ```
 
 ## Installation
@@ -170,14 +168,24 @@ patient-navigator/
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # then edit .env — LLM_API_KEY is required for real replies
+cp .env.example .env
 python manage.py migrate
 python manage.py seed_safety_rules
 python manage.py seed_knowledge_base
-python manage.py seed_appointments      # fictional departments/providers/availability
+python manage.py seed_appointments
 python manage.py createsuperuser
 python manage.py runserver
 ```
+
+To exercise the proactive-reminder flow locally: book an appointment,
+create a reminder scheduled a minute or two out, then run
+
+```bash
+python manage.py process_reminders
+```
+
+and check `GET /api/notifications/` (or the Notifications page) — no
+new chat message required.
 
 ### Frontend
 
@@ -192,35 +200,31 @@ npm run dev
 
 ```bash
 cd backend
-python manage.py test          # 203 tests
+python manage.py test          # 272 tests
 ```
 
-## API overview (new in Phase 4)
+## API overview (new in Phase 5)
 
 ```
-# Read-only, any authenticated patient
-GET  /api/departments/
-GET  /api/providers/?department=&query=
-GET  /api/appointments/available-slots/?department=&provider=&date=
+GET    /api/follow-ups/                        list own follow-ups
+POST   /api/follow-ups/                         create one
+GET    /api/follow-ups/{id}/                    retrieve (own only)
+PATCH  /api/follow-ups/{id}/                    {"status": "completed"|"cancelled"}
+DELETE /api/follow-ups/{id}/                    cancel
+POST   /api/follow-ups/appointment-reminder/    one-click "remind me" after booking
 
-# Direct appointment management — scoped to the requesting patient
-GET    /api/appointments/            list own appointments
-POST   /api/appointments/            book directly (executes immediately)
-GET    /api/appointments/{id}/       retrieve (own only — 404 otherwise)
-PATCH  /api/appointments/{id}/       reschedule (executes immediately)
-DELETE /api/appointments/{id}/       cancel (executes immediately)
+GET    /api/reminders/
+POST   /api/reminders/
+PATCH  /api/reminders/{id}/                     reschedule
+DELETE /api/reminders/{id}/                     cancel
 
-# Agent-proposed action confirmation — the only place a chat-proposed
-# booking/cancel/reschedule actually executes
-POST /api/appointments/agent-actions/{id}/confirm/
-POST /api/appointments/agent-actions/{id}/decline/
+GET    /api/notifications/?unread=1
+PATCH  /api/notifications/{id}/read/
 ```
 
-The chat endpoint (`POST /api/conversations/{id}/messages/`) is
-unchanged in shape from earlier phases, but assistant messages can now
-carry `appointment_data` (selectable slot/appointment/provider cards)
-and `pending_action` (a confirm/decline card) alongside the usual
-`content`, `urgency`, and `sources`.
+Agent-proposed complete/cancel actions still go through the shared
+`POST /api/appointments/agent-actions/{id}/confirm|decline/` endpoints
+introduced in Phase 4 — see "Architecture" above.
 
 ## Development roadmap
 
@@ -228,12 +232,14 @@ and `pending_action` (a confirm/decline card) alongside the usual
 Phase 1 — Foundation
 Phase 2 — Navigator Agent
 Phase 3 — Healthcare Knowledge, Triage & Safety
-Phase 4 — Healthcare Actions, Appointments & Tool Calling   (this repo)
-Phase 5 — Follow-up + Notifications
+Phase 4 — Healthcare Actions, Appointments & Tool Calling
+Phase 5 — Follow-Up, Reminders & Proactive Care Coordination   (this repo)
 Phase 6 — Safety + Human Escalation
 Phase 7 — Deployment + Monitoring
 ```
 
-Real hospital/insurance integrations, payment processing, prescription
-ordering, real clinical records, and autonomous treatment decisions
-remain explicitly out of scope.
+At this point NaviCare has an orchestrating agent, specialized agents,
+RAG, deterministic safety controls, controlled tool execution,
+persistent state, scheduled background work, and proactive patient
+notifications — the next phase is about human escalation, observability,
+and hardening, not new user-facing features.

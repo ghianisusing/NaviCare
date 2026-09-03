@@ -1,10 +1,29 @@
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { listNotifications } from '../api/notifications'
 import './app-shell.css'
 
 export default function AppShell() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadUnread() {
+      try {
+        const data = await listNotifications(true)
+        if (!cancelled) setUnreadCount(data.length)
+      } catch {
+        // Non-critical — a failed badge fetch shouldn't disrupt navigation.
+      }
+    }
+    loadUnread()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   async function handleLogout() {
     await logout()
@@ -33,6 +52,13 @@ export default function AppShell() {
           <nav className="shell-nav">
             <NavLink to="/dashboard" className={({ isActive }) => (isActive ? 'active' : '')}>
               Dashboard
+            </NavLink>
+            <NavLink to="/follow-ups" className={({ isActive }) => (isActive ? 'active' : '')}>
+              Follow-ups
+            </NavLink>
+            <NavLink to="/notifications" className={({ isActive }) => (isActive ? 'active' : '')}>
+              Notifications
+              {unreadCount > 0 && <span className="shell-notification-badge">{unreadCount}</span>}
             </NavLink>
             <NavLink to="/profile" className={({ isActive }) => (isActive ? 'active' : '')}>
               Profile

@@ -1,0 +1,57 @@
+.notifications-page h1 {
+  font-size: 1.7rem;
+}
+
+.notification-list {
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notification-card {
+  padding: 14px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.notification-card.notification-read {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.notification-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.notification-read .notification-dot {
+  background: transparent;
+  border: 1px solid var(--color-border);
+}
+
+.notification-title {
+  font-weight: 600;
+  color: var(--color-ink);
+  font-size: 0.92rem;
+}
+
+.notification-message {
+  font-size: 0.86rem;
+  color: var(--color-ink-muted);
+  margin-top: 2px;
+}
+
+.notification-time {
+  font-size: 0.76rem;
+  color: var(--color-ink-muted);
+  margin-top: 4px;
+}

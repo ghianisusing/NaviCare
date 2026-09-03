@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from agents.core.exceptions import AgentError, InvalidAgentOutputError
 from agents.core.llm import LLMMessage, get_llm_provider
 from agents.appointment.service import handle_appointment_request
+from agents.follow_up.service import handle_follow_up_request
 from agents.information.service import handle_information_request
 from agents.triage.service import handle_symptom_concern
 
@@ -48,14 +49,12 @@ FALLBACK_INVALID_OUTPUT_RESPONSE = (
 )
 
 # Temporary responses for intents that route to agents that still don't
-# exist (follow-up is Phase 5+). Information, Triage, and Appointment
-# are real as of Phase 3/4 and are handled by _route below, not this
-# table.
+# exist. Information, Triage, Appointment, and Follow-Up are all real
+# as of Phase 3/4/5 and are handled by _route below, not this table.
 AGENT_NOT_READY_RESPONSES = {
-    "follow_up": (
-        "Following up on lab results or prior visits is still being "
-        "prepared. For now, your care team or patient portal is the "
-        "fastest way to get that information."
+    "escalation": (
+        "A human escalation path is still being prepared. If this is "
+        "urgent, please contact your healthcare provider directly."
     ),
 }
 
@@ -72,6 +71,7 @@ class NavigatorTurnResult:
     display_urgency: str = "normal"
     appointment_data: dict | None = None
     pending_action: dict | None = None
+    follow_up_data: dict | None = None
 
 
 def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTurnResult:
@@ -104,7 +104,7 @@ def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTu
     try:
         agent_output = run_navigator(conversation=conversation, patient_message=patient_message)
         agent_output = safety.apply_safety_validation(agent_output=agent_output, patient_message=patient_message)
-        response_text, sources, display_urgency, appointment_data, pending_action = _route(
+        response_text, sources, display_urgency, appointment_data, pending_action, follow_up_data = _route(
             conversation=conversation, agent_output=agent_output, patient_message=patient_message
         )
         succeeded = True
@@ -115,6 +115,7 @@ def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTu
         display_urgency = agent_output.urgency if agent_output.urgency != "unknown" else "normal"
         appointment_data = None
         pending_action = None
+        follow_up_data = None
         succeeded = False
         logger.warning("Navigator agent failed (%s): %s", type(exc).__name__, exc)
 
@@ -132,22 +133,23 @@ def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTu
         display_urgency=display_urgency,
         appointment_data=appointment_data,
         pending_action=pending_action,
+        follow_up_data=follow_up_data,
     )
 
 
 def _route(*, conversation, agent_output: AgentOutput, patient_message: str):
     """Resolve the final (response_text, sources, display_urgency,
-    appointment_data, pending_action) for a non-emergency Navigator
-    turn, dispatching to a specialist agent when the intent/routing
-    calls for one."""
+    appointment_data, pending_action, follow_up_data) for a
+    non-emergency Navigator turn, dispatching to a specialist agent
+    when the intent/routing calls for one."""
     if agent_output.intent == "GENERAL_HEALTH_INFORMATION":
         info_result = handle_information_request(conversation=conversation, question=patient_message)
-        return info_result.response_text, info_result.sources, "normal", None, None
+        return info_result.response_text, info_result.sources, "normal", None, None, None
 
     if agent_output.intent == "SYMPTOM_CONCERN":
         triage_result = handle_symptom_concern(conversation=conversation, patient_message=patient_message)
         display_urgency = triage_result.urgency if triage_result.urgency != "unknown" else "normal"
-        return triage_result.response_text, [], display_urgency, None, None
+        return triage_result.response_text, [], display_urgency, None, None, None
 
     if agent_output.intent in ("APPOINTMENT_REQUEST", "APPOINTMENT_CHANGE"):
         appointment_result = handle_appointment_request(
@@ -159,12 +161,26 @@ def _route(*, conversation, agent_output: AgentOutput, patient_message: str):
             "normal",
             appointment_result.appointment_data,
             appointment_result.pending_action,
+            None,
+        )
+
+    if agent_output.intent == "FOLLOW_UP_REQUEST":
+        follow_up_result = handle_follow_up_request(
+            conversation=conversation, patient=conversation.patient, patient_message=patient_message
+        )
+        return (
+            follow_up_result.response_text,
+            [],
+            "normal",
+            None,
+            follow_up_result.pending_action,
+            follow_up_result.follow_up_data,
         )
 
     if agent_output.recommended_action == "ROUTE_TO_AGENT" and agent_output.target_agent in AGENT_NOT_READY_RESPONSES:
-        return AGENT_NOT_READY_RESPONSES[agent_output.target_agent], [], "normal", None, None
+        return AGENT_NOT_READY_RESPONSES[agent_output.target_agent], [], "normal", None, None, None
 
-    return agent_output.response, [], "normal", None, None
+    return agent_output.response, [], "normal", None, None, None
 
 
 def _emergency_output() -> AgentOutput:

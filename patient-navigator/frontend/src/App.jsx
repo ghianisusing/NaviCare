@@ -8,6 +8,8 @@ import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import Profile from './pages/Profile'
 import Chat from './pages/Chat'
+import FollowUps from './pages/FollowUps'
+import Notifications from './pages/Notifications'
 
 export default function App() {
   return (
@@ -22,6 +24,8 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/follow-ups" element={<FollowUps />} />
+              <Route path="/notifications" element={<Notifications />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/chat/:conversationId" element={<Chat />} />
             </Route>

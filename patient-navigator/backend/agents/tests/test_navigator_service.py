@@ -144,18 +144,18 @@ class HandlePatientMessageTests(TestCase):
     def test_route_to_not_yet_built_agent_uses_temporary_message(self, mock_get_provider):
         mock_get_provider.return_value = FakeProvider(
             text=_payload(
-                intent="LAB_RESULT_FOLLOWUP",
+                intent="HUMAN_ASSISTANCE",
                 recommended_action="ROUTE_TO_AGENT",
-                target_agent="follow_up",
-                response="Pulling that up now!",
+                target_agent="escalation",
+                response="Connecting you now!",
             )
         )
 
         result = navigator_service.handle_patient_message(
-            conversation=self.conversation, patient_message="Can you check my lab results?"
+            conversation=self.conversation, patient_message="Can I talk to a human?"
         )
 
-        self.assertNotIn("Pulling that up now", result.response_text)
+        self.assertNotIn("Connecting you now", result.response_text)
         self.assertIn("being prepared", result.response_text)
 
 
@@ -247,6 +247,28 @@ class NavigatorRoutingTests(TestCase):
 
         mock_handle_appointment.assert_called_once()
         self.assertIn("reschedule", result.response_text)
+
+    @mock.patch("agents.navigator.service.handle_follow_up_request")
+    @mock.patch("agents.navigator.agent.get_llm_provider")
+    def test_follow_up_request_routes_to_follow_up_agent(self, mock_get_provider, mock_handle_follow_up):
+        from agents.follow_up.service import FollowUpTurnResult
+
+        mock_get_provider.return_value = FakeProvider(text=_payload(intent="FOLLOW_UP_REQUEST"))
+        mock_handle_follow_up.return_value = FollowUpTurnResult(
+            response_text="You have one upcoming reminder.",
+            follow_up_data={"type": "reminder_list", "reminders": []},
+            pending_action=None,
+            succeeded=True,
+            latency_seconds=0.01,
+        )
+
+        result = navigator_service.handle_patient_message(
+            conversation=self.conversation, patient_message="What reminders do I have?"
+        )
+
+        mock_handle_follow_up.assert_called_once()
+        self.assertIn("reminder", result.response_text)
+        self.assertEqual(result.follow_up_data["type"], "reminder_list")
 
     def test_emergency_pre_check_takes_precedence_over_appointment_wording(self):
         # A message that both requests an appointment AND describes an

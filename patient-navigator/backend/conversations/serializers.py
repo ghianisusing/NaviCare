@@ -15,6 +15,7 @@ class MessageSerializer(serializers.ModelSerializer):
             "sources",
             "appointment_data",
             "pending_action",
+            "follow_up_data",
             "created_at",
         )
         read_only_fields = fields

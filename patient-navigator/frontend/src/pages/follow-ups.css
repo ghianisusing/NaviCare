@@ -1,0 +1,97 @@
+.follow-ups-page h1 {
+  font-size: 1.7rem;
+}
+
+.follow-ups-section-title {
+  font-size: 1.05rem;
+  margin: 32px 0 14px;
+  color: var(--color-ink);
+}
+
+.follow-up-list {
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.follow-up-card {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.follow-up-card-resolved {
+  opacity: 0.7;
+}
+
+.follow-up-status-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-bottom: 6px;
+}
+
+.status-pending {
+  background: var(--color-primary-tint);
+  color: var(--color-primary-dark);
+}
+
+.status-expired {
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+}
+
+.status-completed {
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-muted);
+}
+
+.status-cancelled {
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-muted);
+}
+
+.follow-up-title {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.follow-up-description {
+  font-size: 0.86rem;
+  color: var(--color-ink-muted);
+  margin-top: 2px;
+}
+
+.follow-up-due {
+  font-size: 0.82rem;
+  color: var(--color-ink-muted);
+  margin-top: 4px;
+}
+
+.follow-up-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 560px) {
+  .follow-up-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .follow-up-actions {
+    width: 100%;
+  }
+  .follow-up-actions .btn {
+    flex: 1;
+  }
+}

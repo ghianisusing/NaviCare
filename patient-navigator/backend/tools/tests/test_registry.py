@@ -10,6 +10,7 @@ from tools.schemas import ToolField, ToolSpec, validate_arguments
 # registry as a side effect — needed for get_tool()/list_tools() below
 # to see anything.
 import tools.appointment_tools  # noqa: F401
+import tools.follow_up_tools  # noqa: F401
 
 
 class RegistryTests(SimpleTestCase):
@@ -31,8 +32,23 @@ class RegistryTests(SimpleTestCase):
             "book_appointment",
             "cancel_appointment",
             "reschedule_appointment",
+            "create_follow_up",
+            "get_follow_ups",
+            "complete_follow_up",
+            "cancel_follow_up",
+            "create_reminder",
+            "get_reminders",
+            "cancel_reminder",
         }
         self.assertEqual(expected, expected & names)
+
+    def test_follow_up_mutating_tools_require_confirmation(self):
+        for name in ("complete_follow_up", "cancel_follow_up", "cancel_reminder"):
+            self.assertTrue(get_tool(name).requires_confirmation)
+
+    def test_follow_up_create_tools_do_not_require_confirmation(self):
+        for name in ("create_follow_up", "create_reminder", "get_follow_ups", "get_reminders"):
+            self.assertFalse(get_tool(name).requires_confirmation)
 
     def test_mutating_tools_require_confirmation(self):
         for name in ("book_appointment", "cancel_appointment", "reschedule_appointment"):

@@ -52,6 +52,13 @@ class Message(models.Model):
     appointment_data = models.JSONField(blank=True, null=True, default=None)
     pending_action = models.JSONField(blank=True, null=True, default=None)
 
+    # Populated only for Follow-Up Agent turns — the follow-up/reminder
+    # equivalent of appointment_data (see
+    # agents/follow_up/service.py:_build_follow_up_data). Pending
+    # complete/cancel proposals still use the shared `pending_action`
+    # field above (AgentAction is a domain-agnostic record).
+    follow_up_data = models.JSONField(blank=True, null=True, default=None)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

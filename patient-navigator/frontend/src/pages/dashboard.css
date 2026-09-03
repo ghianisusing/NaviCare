@@ -91,6 +91,13 @@
   background: var(--color-danger-tint);
 }
 
+.appointment-reminder-set {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  align-self: center;
+}
+
 @media (max-width: 560px) {
   .appointment-card {
     flex-direction: column;

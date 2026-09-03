@@ -44,6 +44,8 @@ INSTALLED_APPS = [
     "knowledge",
     "safety",
     "appointments",
+    "follow_ups",
+    "notifications",
 ]
 
 MIDDLEWARE = [
@@ -181,6 +183,7 @@ LOGGING = {
         "agents": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "safety": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "knowledge": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "notifications": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }
 
