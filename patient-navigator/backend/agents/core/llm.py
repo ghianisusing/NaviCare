@@ -107,7 +107,10 @@ class AnthropicProvider(LLMProvider):
 
         try:
             response = requests.post(
-                self.API_URL, headers=headers, data=json.dumps(payload), timeout=DEFAULT_TIMEOUT_SECONDS
+                self.API_URL,
+                headers=headers,
+                data=json.dumps(payload),
+                timeout=DEFAULT_TIMEOUT_SECONDS,
             )
         except requests.Timeout as exc:
             raise LLMUnavailableError("LLM request timed out.") from exc
@@ -115,18 +118,99 @@ class AnthropicProvider(LLMProvider):
             raise LLMUnavailableError("LLM provider could not be reached.") from exc
 
         if response.status_code >= 500:
-            raise LLMUnavailableError(f"LLM provider returned a server error ({response.status_code}).")
+            raise LLMUnavailableError(
+                f"LLM provider returned a server error ({response.status_code})."
+            )
         if response.status_code >= 400:
             # Never surface the raw provider body (may contain the key's
             # account details) — just log it server-side.
-            logger.warning("LLM provider returned %s for a request.", response.status_code)
-            raise LLMResponseError(f"LLM provider rejected the request ({response.status_code}).")
+            logger.warning(
+                "LLM provider returned %s for a request.", response.status_code
+            )
+            raise LLMResponseError(
+                f"LLM provider rejected the request ({response.status_code})."
+            )
 
         try:
             data = response.json()
-            text = "".join(block.get("text", "") for block in data.get("content", []) if block.get("type") == "text")
+            text = "".join(
+                block.get("text", "")
+                for block in data.get("content", [])
+                if block.get("type") == "text"
+            )
         except (ValueError, KeyError, AttributeError) as exc:
-            raise LLMResponseError("LLM provider returned an unparsable response.") from exc
+            raise LLMResponseError(
+                "LLM provider returned an unparsable response."
+            ) from exc
+
+        if not text.strip():
+            raise LLMResponseError("LLM provider returned an empty completion.")
+
+        return LLMResult(text=text, raw=data)
+
+
+class OpenAIProvider(LLMProvider):
+    """Calls the OpenAI Chat Completions API directly over HTTPS."""
+
+    API_URL = "https://api.openai.com/v1/chat/completions"
+
+    def __init__(self, api_key: str, model: str):
+        if not api_key:
+            raise LLMUnavailableError("LLM_API_KEY is not configured.")
+        self._api_key = api_key
+        self._model = model
+
+    def complete(
+        self,
+        *,
+        system_prompt: str,
+        messages: list[LLMMessage],
+        max_tokens: int = 1024,
+        temperature: float = 0.2,
+    ) -> LLMResult:
+        payload = {
+            "model": self._model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": [{"role": "system", "content": system_prompt}]
+            + [{"role": m.role, "content": m.content} for m in messages],
+        }
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "content-type": "application/json",
+        }
+
+        try:
+            response = requests.post(
+                self.API_URL,
+                headers=headers,
+                data=json.dumps(payload),
+                timeout=DEFAULT_TIMEOUT_SECONDS,
+            )
+        except requests.Timeout as exc:
+            raise LLMUnavailableError("LLM request timed out.") from exc
+        except requests.RequestException as exc:
+            raise LLMUnavailableError("LLM provider could not be reached.") from exc
+
+        if response.status_code >= 500:
+            raise LLMUnavailableError(
+                f"LLM provider returned a server error ({response.status_code})."
+            )
+        if response.status_code >= 400:
+            logger.warning(
+                "LLM provider returned %s for a request.", response.status_code
+            )
+            raise LLMResponseError(
+                f"LLM provider rejected the request ({response.status_code})."
+            )
+
+        try:
+            data = response.json()
+            text = data["choices"][0]["message"]["content"] or ""
+        except (ValueError, KeyError, IndexError, AttributeError) as exc:
+            raise LLMResponseError(
+                "LLM provider returned an unparsable response."
+            ) from exc
 
         if not text.strip():
             raise LLMResponseError("LLM provider returned an empty completion.")
@@ -138,21 +222,22 @@ _provider_instance: LLMProvider | None = None
 
 
 def get_llm_provider() -> LLMProvider:
-    """Returns the process-wide LLM provider, constructing it on first use.
-
-    A module-level singleton is fine here: the provider itself is
-    stateless (holds only credentials/config), and rebuilding it per
-    request would just re-read the same environment variables.
-    """
     global _provider_instance
     if _provider_instance is None:
         provider_name = config("LLM_PROVIDER", default="anthropic")
-        if provider_name != "anthropic":
+        api_key = config("LLM_API_KEY", default="")
+        model = config("LLM_MODEL", default=None)
+
+        if provider_name == "anthropic":
+            _provider_instance = AnthropicProvider(
+                api_key=api_key, model=model or "claude-sonnet-4-6"
+            )
+        elif provider_name == "openai":
+            _provider_instance = OpenAIProvider(
+                api_key=api_key, model=model or "gpt-4o"
+            )
+        else:
             raise LLMUnavailableError(f"Unsupported LLM_PROVIDER: {provider_name}")
-        _provider_instance = AnthropicProvider(
-            api_key=config("LLM_API_KEY", default=""),
-            model=config("LLM_MODEL", default="claude-sonnet-4-6"),
-        )
     return _provider_instance
 
 

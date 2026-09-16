@@ -46,6 +46,8 @@ INSTALLED_APPS = [
     "appointments",
     "follow_ups",
     "notifications",
+    "escalations",
+    "observability",
 ]
 
 MIDDLEWARE = [
@@ -184,6 +186,7 @@ LOGGING = {
         "safety": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "knowledge": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "notifications": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "observability": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }
 
@@ -196,3 +199,16 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=False, cast=bool)
+
+# ---------------------------------------------------------------------------
+# Human escalation (escalations/, agents/escalation/) — Phase 6
+# ---------------------------------------------------------------------------
+# After this many consecutive failed agent turns in one conversation,
+# agents/navigator/service.py automatically escalates to a human rather
+# than continuing to retry indefinitely.
+MAX_AGENT_FAILURES_BEFORE_ESCALATION = config("MAX_AGENT_FAILURES_BEFORE_ESCALATION", default=3, cast=int)
+
+# Operational (not clinical) staff-dashboard targets — see
+# escalations/services/escalation_service.py and the staff queue view.
+NORMAL_ESCALATION_TARGET_MINUTES = config("NORMAL_ESCALATION_TARGET_MINUTES", default=60, cast=int)
+HIGH_ESCALATION_TARGET_MINUTES = config("HIGH_ESCALATION_TARGET_MINUTES", default=15, cast=int)

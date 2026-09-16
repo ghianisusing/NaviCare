@@ -141,7 +141,29 @@ class HandlePatientMessageTests(TestCase):
         self.assertFalse(result.succeeded)
 
     @mock.patch("agents.navigator.agent.get_llm_provider")
-    def test_route_to_not_yet_built_agent_uses_temporary_message(self, mock_get_provider):
+    def test_unimplemented_intent_falls_through_to_navigator_response(self, mock_get_provider):
+        # LAB_RESULT_FOLLOWUP has no specialist agent and doesn't map to
+        # HUMAN_ASSISTANCE/ESCALATE, so it falls through to the
+        # Navigator's own conversational response rather than crashing
+        # or fabricating an action.
+        mock_get_provider.return_value = FakeProvider(
+            text=_payload(
+                intent="LAB_RESULT_FOLLOWUP",
+                recommended_action="RESPOND",
+                target_agent=None,
+                response="I can't pull up lab results yet, but I can help you contact your provider.",
+            )
+        )
+
+        result = navigator_service.handle_patient_message(
+            conversation=self.conversation, patient_message="Can you check my lab results?"
+        )
+
+        self.assertIn("can't pull up lab results", result.response_text)
+        self.assertEqual(result.final_agent, "navigator")
+
+    @mock.patch("agents.navigator.agent.get_llm_provider")
+    def test_explicit_human_request_creates_escalation(self, mock_get_provider):
         mock_get_provider.return_value = FakeProvider(
             text=_payload(
                 intent="HUMAN_ASSISTANCE",
@@ -155,8 +177,27 @@ class HandlePatientMessageTests(TestCase):
             conversation=self.conversation, patient_message="Can I talk to a human?"
         )
 
-        self.assertNotIn("Connecting you now", result.response_text)
-        self.assertIn("being prepared", result.response_text)
+        self.assertIsNotNone(result.escalation_id)
+        self.assertEqual(result.final_agent, "escalation")
+        self.assertIn("care support", result.response_text.lower())
+
+    @mock.patch("agents.navigator.agent.get_llm_provider")
+    def test_out_of_scope_escalate_recommendation_creates_escalation(self, mock_get_provider):
+        mock_get_provider.return_value = FakeProvider(
+            text=_payload(
+                intent="MEDICATION_INFORMATION",
+                recommended_action="ESCALATE",
+                target_agent="escalation",
+                response="I can't change a prescription myself.",
+            )
+        )
+
+        result = navigator_service.handle_patient_message(
+            conversation=self.conversation, patient_message="Can you change my prescription?"
+        )
+
+        self.assertIsNotNone(result.escalation_id)
+        self.assertEqual(result.final_agent, "escalation")
 
 
 class NavigatorRoutingTests(TestCase):
@@ -283,3 +324,70 @@ class NavigatorRoutingTests(TestCase):
         self.assertTrue(result.succeeded)
         self.assertEqual(result.agent_output.recommended_action, "ESCALATE")
         self.assertIn("urgent medical attention", result.response_text)
+
+
+class RepeatedFailureEscalationTests(TestCase):
+    """Phase 6: after MAX_AGENT_FAILURES_BEFORE_ESCALATION consecutive
+    failed turns, hand off to a human rather than retrying forever."""
+
+    def setUp(self):
+        user = User.objects.create_user(username="repeat_fail_patient", password="S0meStrongPass!")
+        self.patient = Patient.objects.create(user=user, first_name="Repeat", last_name="Fail")
+        self.conversation = Conversation.objects.create(patient=self.patient)
+
+    @mock.patch("agents.navigator.agent.get_llm_provider")
+    def test_reaching_failure_threshold_creates_escalation(self, mock_get_provider):
+        from django.test import override_settings
+
+        from escalations.models import Escalation
+
+        mock_get_provider.return_value = FakeProvider(raises=LLMUnavailableError("down"))
+
+        with override_settings(MAX_AGENT_FAILURES_BEFORE_ESCALATION=2):
+            first = navigator_service.handle_patient_message(
+                conversation=self.conversation, patient_message="What is a colonoscopy?"
+            )
+            self.assertIsNone(first.escalation_id)
+
+            second = navigator_service.handle_patient_message(
+                conversation=self.conversation, patient_message="What is an MRI?"
+            )
+
+        self.assertIsNotNone(second.escalation_id)
+        self.assertTrue(second.succeeded)
+
+        escalation = Escalation.objects.get(id=second.escalation_id)
+        self.assertEqual(escalation.reason, Escalation.Reason.REPEATED_FAILURE)
+
+    @mock.patch("agents.navigator.agent.get_llm_provider")
+    def test_success_resets_failure_counter(self, mock_get_provider):
+        from django.test import override_settings
+
+        with override_settings(MAX_AGENT_FAILURES_BEFORE_ESCALATION=2):
+            mock_get_provider.return_value = FakeProvider(raises=LLMUnavailableError("down"))
+            navigator_service.handle_patient_message(
+                conversation=self.conversation, patient_message="What is a colonoscopy?"
+            )
+            self.conversation.refresh_from_db()
+            self.assertEqual(self.conversation.consecutive_agent_failures, 1)
+
+            mock_get_provider.return_value = FakeProvider(text=_payload())
+            navigator_service.handle_patient_message(conversation=self.conversation, patient_message="Hi again")
+            self.conversation.refresh_from_db()
+            self.assertEqual(self.conversation.consecutive_agent_failures, 0)
+
+    @mock.patch("agents.navigator.agent.get_llm_provider")
+    def test_trace_status_is_escalated_when_escalation_created(self, mock_get_provider):
+        from observability.models import AgentTrace
+
+        mock_get_provider.return_value = FakeProvider(
+            text=_payload(intent="HUMAN_ASSISTANCE", recommended_action="ROUTE_TO_AGENT", target_agent="escalation")
+        )
+
+        result = navigator_service.handle_patient_message(
+            conversation=self.conversation, patient_message="I want to speak to a person."
+        )
+
+        trace = AgentTrace.objects.get(request_id=result.request_id)
+        self.assertEqual(trace.status, AgentTrace.Status.ESCALATED)
+        self.assertEqual(trace.final_agent, "escalation")

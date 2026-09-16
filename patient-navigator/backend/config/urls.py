@@ -12,4 +12,6 @@ urlpatterns = [
     path("api/", include("appointments.urls")),
     path("api/", include("follow_ups.urls")),
     path("api/", include("notifications.urls")),
+    path("api/", include("escalations.urls")),
+    path("api/", include("observability.urls")),
 ]

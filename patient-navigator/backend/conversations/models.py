@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 from patients.models import Patient
@@ -12,6 +13,13 @@ class Conversation(models.Model):
         help_text="Rolling, non-clinical summary of the conversation used as LLM context. "
         "Never contains diagnoses or medical assumptions — see agents/navigator/prompts.py.",
     )
+
+    # Consecutive failed agent turns (LLM/tool/validation errors — not
+    # emergency escalations or normal clarifying questions). Reset to 0
+    # on any successful turn. Used by agents/navigator/service.py to
+    # trigger an automatic REPEATED_FAILURE escalation once it reaches
+    # settings.MAX_AGENT_FAILURES_BEFORE_ESCALATION — see Phase 6.
+    consecutive_agent_failures = models.PositiveIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -28,10 +36,19 @@ class Message(models.Model):
         USER = "user", "User"
         ASSISTANT = "assistant", "Assistant"
         SYSTEM = "system", "System"
+        STAFF = "staff", "Staff"  # a human care coordinator response — see Phase 6
 
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="messages")
     role = models.CharField(max_length=16, choices=Role.choices)
     content = models.TextField()
+
+    # Populated only when role=STAFF — identifies which staff member
+    # sent a human response during an escalation, so the frontend can
+    # clearly label it "Care Support" rather than impersonating the AI
+    # assistant (or vice versa). See escalations/services/escalation_service.py.
+    sender_staff = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="staff_messages"
+    )
 
     # Populated only for assistant messages. `urgency` mirrors the
     # safety hierarchy (informational/normal, routine, urgent,

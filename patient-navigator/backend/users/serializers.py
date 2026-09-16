@@ -59,5 +59,10 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "username", "email")
+        # is_staff/is_superuser are exposed read-only so the frontend can
+        # conditionally show staff-only navigation (Care Support queue,
+        # Agent Monitoring) — see core/permissions.py for how these map
+        # to CARE_COORDINATOR/ADMIN roles. Never writable from this
+        # serializer; role changes only happen through /admin/.
+        fields = ("id", "username", "email", "is_staff", "is_superuser")
         read_only_fields = fields
