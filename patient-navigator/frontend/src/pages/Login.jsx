@@ -33,24 +33,40 @@ export default function Login() {
     <div className="auth-page">
       <div className="card auth-card">
         <div className="auth-brand">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2 L12 22 M4 12 L20 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.35" />
-            <circle cx="12" cy="12" r="3.2" fill="currentColor" />
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M12 2 L20 5.5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5.5 L12 2Z"
+              fill="var(--color-primary-tint)"
+              stroke="var(--color-primary)"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M12 7 V15 M8 11 H16"
+              stroke="var(--color-primary)"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            />
           </svg>
-          <span>NaviCare</span>
+          <div className="auth-brand-text">
+            <span>NaviCare</span>
+            <span className="auth-brand-sub">Patient & Care Portal</span>
+          </div>
         </div>
-        <h1>Welcome back</h1>
-        <p className="auth-subtitle">Log in to continue your healthcare journey.</p>
+
+        <h1>Sign In to Your Record</h1>
+        <p className="auth-subtitle">Secure access to your appointments, care plans, and navigator consultations.</p>
 
         {error && <div className="alert-error">{error}</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="field">
-            <label htmlFor="username">Username</label>
+            <label htmlFor="username">Username or Patient ID</label>
             <input
               id="username"
               type="text"
               autoComplete="username"
+              placeholder="Enter your username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
@@ -62,20 +78,27 @@ export default function Login() {
               id="password"
               type="password"
               autoComplete="current-password"
+              placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
           </div>
           <button className="btn btn-primary" type="submit" disabled={submitting}>
-            {submitting ? 'Logging in…' : 'Log in'}
+            {submitting ? 'Authenticating…' : 'Sign In'}
           </button>
         </form>
 
         <div className="auth-footer">
-          New here? <Link to="/register">Create an account</Link>
+          New to NaviCare? <Link to="/register">Create a patient account</Link>
+        </div>
+
+        <div className="auth-security-notice">
+          <span aria-hidden="true">🔒</span>
+          <span>Protected by strict patient data isolation and encrypted access standards.</span>
         </div>
       </div>
     </div>
   )
 }
+

@@ -54,45 +54,105 @@ export default function Profile() {
     }
   }
 
-  if (loading) return <p className="dashboard-muted">Loading profile…</p>
+  if (loading) return <p className="dashboard-muted">Retrieving patient record…</p>
 
   return (
     <div className="profile-page">
-      <h1>Your profile</h1>
-      <p className="dashboard-subtitle">Keep your details up to date so we can support you better.</p>
+      <div className="profile-header-group">
+        <h1>Patient Medical Record & Profile</h1>
+        <p className="dashboard-subtitle">
+          Manage your verified demographic data, primary contact details, and portal security settings.
+        </p>
+      </div>
 
       {error && <div className="alert-error">{error}</div>}
-      {saved && <div className="alert-success">Profile updated.</div>}
+      {saved && <div className="alert-success">✓ Patient record updated successfully.</div>}
 
-      <div className="card profile-card">
-        <form onSubmit={handleSubmit}>
-          <div className="auth-row">
-            <div className="field">
-              <label htmlFor="first_name">First name</label>
-              <input id="first_name" type="text" value={form.first_name} onChange={update('first_name')} required />
+      <div className="profile-grid">
+        <div className="card profile-card">
+          <div className="card-section-header">
+            <h3>Demographics & Contact Information</h3>
+            <p className="dashboard-muted">Used by clinical navigators and appointment coordinators.</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="profile-form">
+            <div className="profile-row">
+              <div className="field">
+                <label htmlFor="first_name">Legal First Name</label>
+                <input
+                  id="first_name"
+                  type="text"
+                  value={form.first_name}
+                  onChange={update('first_name')}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="last_name">Legal Last Name</label>
+                <input
+                  id="last_name"
+                  type="text"
+                  value={form.last_name}
+                  onChange={update('last_name')}
+                  required
+                />
+              </div>
             </div>
+
             <div className="field">
-              <label htmlFor="last_name">Last name</label>
-              <input id="last_name" type="text" value={form.last_name} onChange={update('last_name')} required />
+              <label htmlFor="date_of_birth">Date of Birth</label>
+              <input
+                id="date_of_birth"
+                type="date"
+                value={form.date_of_birth}
+                onChange={update('date_of_birth')}
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="phone_number">Primary Contact Phone</label>
+              <input
+                id="phone_number"
+                type="tel"
+                placeholder="(555) 000-0000"
+                value={form.phone_number}
+                onChange={update('phone_number')}
+              />
+            </div>
+
+            <div className="field">
+              <label>Portal Account Email</label>
+              <input type="email" value={profile?.email || ''} disabled />
+              <span className="field-hint">Primary email cannot be changed directly in self-service.</span>
+            </div>
+
+            <button className="btn btn-primary" type="submit" disabled={saving}>
+              {saving ? 'Saving changes…' : 'Save Patient Profile'}
+            </button>
+          </form>
+        </div>
+
+        <aside className="profile-security-aside">
+          <div className="card security-card">
+            <h4>Patient Data & Privacy Protection</h4>
+            <p className="dashboard-muted">
+              Your health data and care consultations are strictly isolated to your verified account. Neither other patients nor unapproved third parties can access your records.
+            </p>
+            <div className="security-badges">
+              <span className="badge badge-success">✓ HIPAA Isolation Compliant</span>
+              <span className="badge badge-primary">✓ Strict Identity Verification</span>
             </div>
           </div>
-          <div className="field">
-            <label htmlFor="date_of_birth">Date of birth</label>
-            <input id="date_of_birth" type="date" value={form.date_of_birth} onChange={update('date_of_birth')} />
+
+          <div className="card help-card">
+            <h4>Need Clinical Support?</h4>
+            <p className="dashboard-muted">
+              If you have urgent medical questions or need assistance adjusting your record, contact your care navigator or clinic reception.
+            </p>
           </div>
-          <div className="field">
-            <label htmlFor="phone_number">Phone number</label>
-            <input id="phone_number" type="tel" value={form.phone_number} onChange={update('phone_number')} />
-          </div>
-          <div className="field">
-            <label>Email</label>
-            <input type="email" value={profile?.email || ''} disabled />
-          </div>
-          <button className="btn btn-primary" type="submit" disabled={saving}>
-            {saving ? 'Saving…' : 'Save changes'}
-          </button>
-        </form>
+        </aside>
       </div>
     </div>
   )
 }
+

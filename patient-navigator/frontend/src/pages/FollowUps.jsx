@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { cancelFollowUp, completeFollowUp, listFollowUps } from '../api/followUps'
 import { extractErrorMessage } from '../api/client'
+import ConfirmDialog from '../components/ConfirmDialog'
 import './follow-ups.css'
 
 function formatDate(isoString) {
@@ -15,10 +17,10 @@ function formatDate(isoString) {
 }
 
 const STATUS_LABELS = {
-  pending: 'Pending',
+  pending: 'Pending Action',
   completed: 'Completed',
   cancelled: 'Cancelled',
-  expired: 'Overdue',
+  expired: 'Overdue Task',
 }
 
 export default function FollowUps() {
@@ -26,12 +28,10 @@ export default function FollowUps() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const [activeTab, setActiveTab] = useState('active') // 'active' | 'completed' | 'all'
+  const [confirmation, setConfirmation] = useState(null)
 
-  useEffect(() => {
-    load()
-  }, [])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -42,7 +42,11 @@ export default function FollowUps() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   async function handleComplete(id) {
     setBusyId(id)
@@ -53,11 +57,11 @@ export default function FollowUps() {
       setError(extractErrorMessage(err))
     } finally {
       setBusyId(null)
+      setConfirmation(null)
     }
   }
 
   async function handleCancel(id) {
-    if (!window.confirm('Cancel this follow-up?')) return
     setBusyId(id)
     try {
       await cancelFollowUp(id)
@@ -66,68 +70,174 @@ export default function FollowUps() {
       setError(extractErrorMessage(err))
     } finally {
       setBusyId(null)
+      setConfirmation(null)
     }
   }
 
-  const pending = followUps.filter((f) => f.status === 'pending' || f.status === 'expired')
-  const resolved = followUps.filter((f) => f.status === 'completed' || f.status === 'cancelled')
+  const activeTasks = followUps.filter((f) => f.status === 'pending' || f.status === 'expired')
+  const completedTasks = followUps.filter((f) => f.status === 'completed')
+
+  let displayedTasks = followUps
+  if (activeTab === 'active') {
+    displayedTasks = activeTasks
+  } else if (activeTab === 'completed') {
+    displayedTasks = completedTasks
+  }
 
   return (
     <div className="follow-ups-page">
-      <h1>Follow-ups</h1>
-      <p className="dashboard-subtitle">Navigation tasks and reminders you've asked NaviCare to track.</p>
+      <div className="page-header">
+        <div>
+          <h1>Care Plan & Follow-up Tasks</h1>
+          <p className="dashboard-subtitle">
+            Personal health action items, lab preparations, and reminders tracked with your Patient Navigator.
+          </p>
+        </div>
+      </div>
 
       {error && <div className="alert-error">{error}</div>}
-      {loading && <p className="dashboard-muted">Loading…</p>}
 
-      {!loading && pending.length === 0 && resolved.length === 0 && (
+      {/* Tabs */}
+      <div className="follow-ups-tabs" role="tablist" aria-label="Care task views">
+        <button
+          id="active-tasks-tab"
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'active'}
+          aria-controls="care-task-panel"
+          className={`tab-btn ${activeTab === 'active' ? 'active' : ''}`}
+          onClick={() => setActiveTab('active')}
+        >
+          Action Needed <span className="tab-counter">{activeTasks.length}</span>
+        </button>
+        <button
+          id="completed-tasks-tab"
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'completed'}
+          aria-controls="care-task-panel"
+          className={`tab-btn ${activeTab === 'completed' ? 'active' : ''}`}
+          onClick={() => setActiveTab('completed')}
+        >
+          Completed <span className="tab-counter">{completedTasks.length}</span>
+        </button>
+        <button
+          id="all-tasks-tab"
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'all'}
+          aria-controls="care-task-panel"
+          className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
+          onClick={() => setActiveTab('all')}
+        >
+          All Records <span className="tab-counter">{followUps.length}</span>
+        </button>
+      </div>
+
+      <div
+        id="care-task-panel"
+        role="tabpanel"
+        aria-labelledby={`${activeTab}-tasks-tab`}
+        tabIndex="0"
+      >
+        {loading && <p className="dashboard-muted">Retrieving your care tasks…</p>}
+
+        {!loading && displayedTasks.length === 0 && (
         <div className="card empty-state">
-          <p>No follow-ups yet.</p>
-          <p className="dashboard-muted">Ask NaviCare to remind you about something, and it'll show up here.</p>
+          <div className="empty-icon" aria-hidden="true">📋</div>
+          <h3>No tasks in this view</h3>
+          <p className="dashboard-muted">
+            {activeTab === 'active'
+              ? 'You have completed all current care action items!'
+              : 'No task records found in this category.'}
+          </p>
+          <Link to="/dashboard" className="btn btn-secondary btn-sm" style={{ marginTop: '6px' }}>
+            Return to Dashboard
+          </Link>
         </div>
       )}
 
-      {!loading && pending.length > 0 && (
+        {!loading && displayedTasks.length > 0 && (
         <ul className="follow-up-list">
-          {pending.map((followUp) => (
-            <li key={followUp.id} className="card follow-up-card">
-              <div>
-                <div className={`follow-up-status-badge status-${followUp.status}`}>
-                  {STATUS_LABELS[followUp.status]}
-                </div>
-                <div className="follow-up-title">{followUp.title}</div>
-                {followUp.description && <div className="follow-up-description">{followUp.description}</div>}
-                {followUp.due_at && <div className="follow-up-due">Due: {formatDate(followUp.due_at)}</div>}
-              </div>
-              <div className="follow-up-actions">
-                <button className="btn btn-primary" onClick={() => handleComplete(followUp.id)} disabled={busyId === followUp.id}>
-                  Mark Complete
-                </button>
-                <button className="btn btn-secondary" onClick={() => handleCancel(followUp.id)} disabled={busyId === followUp.id}>
-                  Cancel
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {!loading && resolved.length > 0 && (
-        <>
-          <h2 className="follow-ups-section-title">Past follow-ups</h2>
-          <ul className="follow-up-list">
-            {resolved.map((followUp) => (
-              <li key={followUp.id} className="card follow-up-card follow-up-card-resolved">
-                <div>
-                  <div className={`follow-up-status-badge status-${followUp.status}`}>
-                    {STATUS_LABELS[followUp.status]}
+          {displayedTasks.map((followUp) => {
+            const isResolved = followUp.status === 'completed' || followUp.status === 'cancelled'
+            return (
+              <li
+                key={followUp.id}
+                className={`card follow-up-card ${isResolved ? 'follow-up-card-resolved' : ''}`}
+              >
+                <div className="follow-up-content">
+                  <div className="follow-up-badge-row">
+                    <span
+                      className={`badge ${
+                        followUp.status === 'pending'
+                          ? 'badge-warning'
+                          : followUp.status === 'expired'
+                          ? 'badge-danger'
+                          : 'badge-neutral'
+                      }`}
+                    >
+                      {STATUS_LABELS[followUp.status] || followUp.status}
+                    </span>
+                    {followUp.due_at && (
+                      <span className="follow-up-due">
+                        Due: {formatDate(followUp.due_at)}
+                      </span>
+                    )}
                   </div>
-                  <div className="follow-up-title">{followUp.title}</div>
+
+                  <h3 className="follow-up-title">{followUp.title}</h3>
+                  {followUp.description && (
+                    <p className="follow-up-description">{followUp.description}</p>
+                  )}
                 </div>
+
+                {!isResolved && (
+                  <div className="follow-up-actions">
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => setConfirmation({ type: 'complete', followUp })}
+                      disabled={busyId === followUp.id}
+                    >
+                      {busyId === followUp.id ? 'Updating…' : '✓ Mark Complete'}
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setConfirmation({ type: 'cancel', followUp })}
+                      disabled={busyId === followUp.id}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+                {isResolved && (
+                  <span className="badge badge-success">✓ {STATUS_LABELS[followUp.status]}</span>
+                )}
               </li>
-            ))}
-          </ul>
-        </>
+            )
+          })}
+        </ul>
+        )}
+      </div>
+
+      {confirmation && (
+        <ConfirmDialog
+          title={confirmation.type === 'complete' ? 'Mark task complete?' : 'Cancel this care task?'}
+          description={
+            confirmation.type === 'complete'
+              ? `Mark “${confirmation.followUp.title}” as complete only after you have finished the requested care action.`
+              : `Cancel “${confirmation.followUp.title}”? It will remain in your care history but will no longer be an active task.`
+          }
+          confirmLabel={confirmation.type === 'complete' ? 'Mark complete' : 'Cancel task'}
+          danger={confirmation.type === 'cancel'}
+          busy={busyId === confirmation.followUp.id}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={() =>
+            confirmation.type === 'complete'
+              ? handleComplete(confirmation.followUp.id)
+              : handleCancel(confirmation.followUp.id)
+          }
+        />
       )}
     </div>
   )

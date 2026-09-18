@@ -4,41 +4,93 @@
   flex-direction: column;
 }
 
+/* Top Clinical Safety Bar */
+.shell-emergency-bar {
+  background: #fff1f2;
+  border-bottom: 1px solid #fecdd3;
+  color: #9f1239;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  padding: 6px 16px;
+}
+
+.shell-emergency-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.emergency-icon {
+  color: var(--color-danger);
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Sticky Clinical Header */
 .shell-header {
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 50;
+  box-shadow: var(--shadow-subtle);
 }
 
 .shell-header-inner {
-  max-width: 1040px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 14px 24px;
+  padding: 12px 24px;
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 28px;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 1.05rem;
-  color: var(--color-primary-dark);
+  gap: 10px;
+  text-decoration: none;
+  flex-shrink: 0;
 }
 
 .brand-mark {
-  color: var(--color-primary);
   display: inline-flex;
+  align-items: center;
 }
 
+.brand-text-group {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.brand-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.22rem;
+  color: var(--color-primary-dark);
+  letter-spacing: -0.02em;
+}
+
+.brand-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-top: 2px;
+}
+
+/* Navigation Links */
 .shell-nav {
   display: flex;
-  gap: 20px;
+  align-items: center;
+  gap: 22px;
   flex: 1;
 }
 
@@ -47,14 +99,21 @@
   text-decoration: none;
   font-weight: 600;
   font-size: 0.92rem;
-  padding: 6px 2px;
+  padding: 8px 2px;
   border-bottom: 2px solid transparent;
+  transition: color 120ms ease, border-color 120ms ease;
+  display: inline-flex;
+  align-items: center;
 }
 
-.shell-nav a.active,
-.shell-nav a:hover {
+.shell-nav a.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.shell-nav a:hover:not(.active) {
   color: var(--color-primary-dark);
-  border-bottom-color: var(--color-accent);
+  border-bottom-color: var(--color-border-strong);
 }
 
 .shell-notification-badge {
@@ -63,42 +122,160 @@
   color: #fff;
   font-size: 0.68rem;
   font-weight: 700;
-  min-width: 16px;
-  height: 16px;
-  line-height: 16px;
+  min-width: 17px;
+  height: 17px;
+  line-height: 17px;
   text-align: center;
-  border-radius: 999px;
-  padding: 0 4px;
-  margin-left: 4px;
+  border-radius: var(--radius-pill);
+  padding: 0 5px;
+  margin-left: 6px;
   vertical-align: middle;
 }
 
+/* User Profile & Actions */
 .shell-user {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  margin-left: auto;
+}
+
+.shell-patient-profile {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.shell-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-tint);
+  color: var(--color-primary-dark);
+  border: 1px solid rgba(23, 82, 107, 0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.shell-user-meta {
+  display: flex;
+  flex-direction: column;
 }
 
 .shell-username {
   font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  line-height: 1.2;
+}
+
+.shell-role-tag {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+}
+
+.shell-logout-btn {
+  font-size: 0.82rem;
+  padding: 5px 12px;
+}
+
+/* Mobile Menu Toggle */
+.shell-menu-toggle {
+  display: none;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+/* Main Content Area */
+.shell-main {
+  flex: 1;
+  max-width: 1120px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 28px 24px 64px;
+}
+
+/* Clinical Portal Footer */
+.shell-footer {
+  margin-top: auto;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding: 20px 24px;
+  font-size: 0.82rem;
   color: var(--color-ink-muted);
 }
 
-.shell-main {
-  flex: 1;
-  max-width: 1040px;
-  width: 100%;
+.shell-footer-inner {
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-@media (max-width: 640px) {
-  .shell-header-inner {
-    flex-wrap: wrap;
-    gap: 12px;
+.shell-footer-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shell-footer-links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Mobile Responsive */
+@media (max-width: 780px) {
+  .shell-menu-toggle {
+    display: inline-flex;
+    margin-left: auto;
   }
+
   .shell-nav {
-    order: 3;
-    width: 100%;
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px 24px 18px;
+    gap: 8px;
+    box-shadow: var(--shadow-modal);
+  }
+
+  .shell-nav.open {
+    display: flex;
+  }
+
+  .shell-nav a {
+    padding: 10px 8px;
+    border-bottom: none;
+    border-radius: var(--radius-sm);
+  }
+
+  .shell-nav a.active {
+    background: var(--color-primary-tint);
+  }
+
+  .shell-user-meta {
+    display: none;
   }
 }
+

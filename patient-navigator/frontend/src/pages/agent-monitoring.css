@@ -1,0 +1,200 @@
+.agent-monitoring-page h1,
+.trace-viewer-page h1 {
+  font-size: 1.7rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 20px 0 32px;
+}
+
+.metric-card {
+  padding: 18px;
+  text-align: center;
+}
+
+.metric-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  font-family: var(--font-display);
+}
+
+.metric-label {
+  font-size: 0.78rem;
+  color: var(--color-ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.breakdown-list {
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+}
+
+.breakdown-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.9rem;
+}
+
+.breakdown-label {
+  color: var(--color-ink);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.breakdown-value {
+  color: var(--color-ink-muted);
+}
+
+.trace-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trace-row {
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.88rem;
+}
+
+.trace-status-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-right: 8px;
+}
+
+.trace-status-badge.status-completed {
+  background: var(--color-primary-tint);
+  color: var(--color-primary-dark);
+}
+
+.trace-status-badge.status-failed {
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+}
+
+.trace-status-badge.status-escalated {
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+}
+
+.trace-status-badge.status-running {
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-muted);
+}
+
+.trace-agent {
+  font-weight: 600;
+  text-transform: capitalize;
+  margin-right: 10px;
+}
+
+.trace-time {
+  color: var(--color-ink-muted);
+}
+
+.trace-id {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.trace-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0;
+  font-size: 0.88rem;
+}
+
+.trace-error-type {
+  color: var(--color-danger);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.trace-step-list {
+  list-style: none;
+  margin: 20px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trace-step-card {
+  padding: 14px 18px;
+}
+
+.trace-step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+
+.trace-step-icon {
+  font-weight: 700;
+}
+
+.trace-step-icon.status-completed {
+  color: var(--color-primary);
+}
+
+.trace-step-icon.status-failed {
+  color: var(--color-danger);
+}
+
+.trace-step-component {
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.trace-step-action {
+  color: var(--color-ink-muted);
+}
+
+.trace-step-latency {
+  margin-left: auto;
+  color: var(--color-ink-muted);
+  font-size: 0.82rem;
+}
+
+.trace-step-metadata {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.trace-metadata-chip {
+  background: var(--color-surface-sunken);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.76rem;
+  color: var(--color-ink-muted);
+  font-family: var(--font-mono);
+}
+
+.trace-total {
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  margin-top: 12px;
+}

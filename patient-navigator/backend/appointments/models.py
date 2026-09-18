@@ -27,10 +27,14 @@ class Department(models.Model):
 
 
 class Provider(models.Model):
-    department = models.ForeignKey(Department, on_delete=models.PROTECT, related_name="providers")
+    department = models.ForeignKey(
+        Department, on_delete=models.PROTECT, related_name="providers"
+    )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    title = models.CharField(max_length=100, blank=True, help_text="e.g. MD, Nurse Practitioner")
+    title = models.CharField(
+        max_length=100, blank=True, help_text="e.g. MD, Nurse Practitioner"
+    )
     bio = models.TextField(blank=True)
     active = models.BooleanField(default=True)
 
@@ -58,7 +62,9 @@ class Availability(models.Model):
     appointments/services/appointment_service.py) rather than
     pre-materialized, keeping seed data simple."""
 
-    provider = models.ForeignKey(Provider, on_delete=models.CASCADE, related_name="availability_windows")
+    provider = models.ForeignKey(
+        Provider, on_delete=models.CASCADE, related_name="availability_windows"
+    )
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
     is_available = models.BooleanField(default=True)
@@ -68,7 +74,11 @@ class Availability(models.Model):
     class Meta:
         ordering = ["start_time"]
         constraints = [
-            models.CheckConstraint(condition=Q(end_time__gt=models.F("start_time")), name="availability_end_after_start")
+            # Availability
+            models.CheckConstraint(
+                condition=Q(end_time__gt=models.F("start_time")),
+                name="availability_end_after_start",
+            )
         ]
 
     def __str__(self):
@@ -82,11 +92,17 @@ class Appointment(models.Model):
         COMPLETED = "completed", "Completed"
         NO_SHOW = "no_show", "No Show"
 
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="appointments")
-    provider = models.ForeignKey(Provider, on_delete=models.PROTECT, related_name="appointments")
+    patient = models.ForeignKey(
+        Patient, on_delete=models.CASCADE, related_name="appointments"
+    )
+    provider = models.ForeignKey(
+        Provider, on_delete=models.PROTECT, related_name="appointments"
+    )
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.SCHEDULED)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.SCHEDULED
+    )
     reason = models.CharField(max_length=255, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -95,7 +111,11 @@ class Appointment(models.Model):
     class Meta:
         ordering = ["start_time"]
         constraints = [
-            models.CheckConstraint(condition=Q(end_time__gt=models.F("start_time")), name="appointment_end_after_start"),
+            # Appointment
+            models.CheckConstraint(
+                condition=Q(end_time__gt=models.F("start_time")),
+                name="appointment_end_after_start",
+            ),
             # Enforced at the database level, not just in application code:
             # only one *scheduled* appointment can exist for a given
             # provider/start_time. This is the backstop against a race
@@ -131,15 +151,25 @@ class AgentAction(models.Model):
 
     class Status(models.TextChoices):
         REQUESTED = "requested", "Requested"
-        VALIDATED = "validated", "Validated"  # passed validation, awaiting patient confirmation
+        VALIDATED = (
+            "validated",
+            "Validated",
+        )  # passed validation, awaiting patient confirmation
         EXECUTED = "executed", "Executed"
         REJECTED = "rejected", "Rejected"  # failed validation/authorization
         DECLINED = "declined", "Declined"  # patient explicitly declined
-        FAILED = "failed", "Failed"  # passed validation but execution failed (e.g. race lost)
+        FAILED = (
+            "failed",
+            "Failed",
+        )  # passed validation but execution failed (e.g. race lost)
 
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="agent_actions")
+    patient = models.ForeignKey(
+        Patient, on_delete=models.CASCADE, related_name="agent_actions"
+    )
     conversation = models.ForeignKey(
-        "conversations.Conversation", on_delete=models.CASCADE, related_name="agent_actions"
+        "conversations.Conversation",
+        on_delete=models.CASCADE,
+        related_name="agent_actions",
     )
     agent = models.CharField(max_length=32, default="appointment")
     tool_name = models.CharField(max_length=64)
@@ -147,7 +177,9 @@ class AgentAction(models.Model):
     # Identifiers/dates only — never store free-text patient content here.
     arguments = models.JSONField(default=dict, blank=True)
 
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.REQUESTED)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.REQUESTED
+    )
     result_summary = models.CharField(max_length=255, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

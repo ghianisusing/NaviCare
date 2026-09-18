@@ -1,33 +1,53 @@
 @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
 
 :root {
-  /* Color — a calm pine/moss palette instead of the usual cream+terracotta
-     "AI default". Meant to read as a trustworthy healthcare portal, not a
-     chatbot demo. */
-  --color-bg: #f6f7f3;
+  /* Healthcare Clinical Palette — Trustworthy, calm, high-legibility clinical colors
+     reminiscent of leading health systems (Epic MyChart, Mayo Clinic, Cleveland Clinic). */
+  --color-bg: #f5f8fb;
   --color-surface: #ffffff;
-  --color-surface-sunken: #eef1ea;
-  --color-border: #dde3da;
-  --color-ink: #1f2b24;
-  --color-ink-muted: #55645a;
-  --color-primary: #2f5d50;
-  --color-primary-dark: #203f37;
-  --color-primary-tint: #e4ede9;
-  --color-accent: #b8925a;
-  --color-accent-tint: #f3e9da;
-  --color-danger: #a4423a;
-  --color-danger-tint: #f6e6e4;
+  --color-surface-sunken: #eef3f8;
+  --color-surface-subtle: #f8fafc;
+  --color-border: #e1e7ee;
+  --color-border-strong: #cbd5e1;
 
-  /* Type */
+  --color-ink: #0f1f2e;
+  --color-ink-muted: #536474;
+  --color-ink-light: #8292a2;
+
+  --color-primary: #17526b;
+  --color-primary-dark: #0f3647;
+  --color-primary-light: #246d8d;
+  --color-primary-tint: #eaf3f7;
+
+  --color-accent: #0f766e;
+  --color-accent-dark: #115e59;
+  --color-accent-tint: #f0fdfa;
+
+  --color-success: #0d8258;
+  --color-success-tint: #edfbf4;
+
+  --color-warning: #b45309;
+  --color-warning-tint: #fef8ee;
+
+  --color-danger: #be2929;
+  --color-danger-tint: #fdf2f2;
+  --color-danger-border: #fca5a5;
+
+  /* Typography */
   --font-display: 'Lora', 'Iowan Old Style', Georgia, serif;
-  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-body: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
 
+  --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 10px;
-  --radius-lg: 18px;
+  --radius-lg: 16px;
+  --radius-pill: 9999px;
 
-  --shadow-card: 0 1px 2px rgba(31, 43, 36, 0.06), 0 8px 24px -12px rgba(31, 43, 36, 0.16);
+  --shadow-subtle: 0 1px 3px rgba(15, 31, 46, 0.04), 0 1px 2px rgba(15, 31, 46, 0.02);
+  --shadow-card: 0 1px 4px rgba(15, 31, 46, 0.06), 0 8px 24px -8px rgba(15, 31, 46, 0.08);
+  --shadow-hover: 0 6px 20px -4px rgba(15, 31, 46, 0.12);
+  --shadow-modal: 0 20px 40px -15px rgba(15, 31, 46, 0.25);
 }
 
 * {
@@ -45,36 +65,61 @@ body {
   background: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 h1,
 h2,
-h3 {
+h3,
+h4 {
   font-family: var(--font-display);
   font-weight: 600;
   margin: 0;
   color: var(--color-primary-dark);
+  letter-spacing: -0.01em;
 }
 
 p {
   margin: 0;
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 a {
   color: var(--color-primary);
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+
+a:hover {
+  color: var(--color-primary-dark);
 }
 
 button,
 input,
+select,
 textarea {
   font-family: inherit;
+  color: inherit;
 }
 
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -85,6 +130,14 @@ textarea {
   }
 }
 
+/* Common UI Components */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -92,41 +145,72 @@ textarea {
   gap: 8px;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
-  padding: 11px 20px;
-  font-size: 0.95rem;
+  padding: 9px 18px;
+  font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease, transform 80ms ease;
+  white-space: nowrap;
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 80ms ease;
 }
 
 .btn:active {
   transform: translateY(1px);
 }
 
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.84rem;
+  border-radius: var(--radius-sm);
+}
+
 .btn-primary {
   background: var(--color-primary);
-  color: #fff;
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 31, 46, 0.1);
 }
 
 .btn-primary:hover {
   background: var(--color-primary-dark);
+  box-shadow: 0 2px 6px rgba(15, 31, 46, 0.15);
 }
 
 .btn-secondary {
-  background: transparent;
+  background: var(--color-surface);
   border-color: var(--color-border);
   color: var(--color-primary-dark);
 }
 
 .btn-secondary:hover {
   background: var(--color-surface-sunken);
+  border-color: var(--color-border-strong);
+}
+
+.btn-outline {
+  background: transparent;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.btn-outline:hover {
+  background: var(--color-primary-tint);
+}
+
+.btn-danger {
+  background: var(--color-danger);
+  color: #ffffff;
+}
+
+.btn-danger:hover {
+  background: #a51f1f;
 }
 
 .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+  transform: none;
 }
 
+/* Forms & Fields */
 .field {
   display: flex;
   flex-direction: column;
@@ -141,31 +225,131 @@ textarea {
   color: var(--color-ink-muted);
 }
 
-.field input {
+.field input,
+.field select,
+.field textarea {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 10px 14px;
   font-size: 0.95rem;
   background: var(--color-surface);
   color: var(--color-ink);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(23, 82, 107, 0.12);
+  outline: none;
 }
 
-.card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
+.field input:disabled {
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-muted);
+  cursor: not-allowed;
 }
 
+/* Medical Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  letter-spacing: 0.01em;
+}
+
+.badge-primary {
+  background: var(--color-primary-tint);
+  color: var(--color-primary-dark);
+}
+
+.badge-accent {
+  background: var(--color-accent-tint);
+  color: var(--color-accent-dark);
+}
+
+.badge-success {
+  background: var(--color-success-tint);
+  color: var(--color-success);
+}
+
+.badge-warning {
+  background: var(--color-warning-tint);
+  color: var(--color-warning);
+}
+
+.badge-danger {
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+}
+
+.badge-neutral {
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-muted);
+}
+
+/* System Alerts */
 .alert-error {
   background: var(--color-danger-tint);
   color: var(--color-danger);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
-  font-size: 0.9rem;
-  margin-bottom: 16px;
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 0.92rem;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.alert-success {
+  background: var(--color-success-tint);
+  color: var(--color-success);
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 0.92rem;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Confirmation dialog */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 31, 46, 0.48);
+}
+
+.confirm-dialog {
+  width: min(100%, 440px);
+  padding: 26px;
+  box-shadow: var(--shadow-modal);
+}
+
+.confirm-dialog h2 {
+  font-size: 1.3rem;
+  margin-bottom: 8px;
+}
+
+.confirm-dialog p {
+  color: var(--color-ink-muted);
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
 }

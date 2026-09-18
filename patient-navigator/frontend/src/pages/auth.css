@@ -3,42 +3,58 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 20px;
+  padding: 40px 20px;
   background:
-    radial-gradient(circle at 15% 20%, var(--color-primary-tint) 0%, transparent 45%),
+    radial-gradient(circle at 20% 20%, var(--color-primary-tint) 0%, transparent 50%),
     var(--color-bg);
 }
 
 .auth-card {
   width: 100%;
-  max-width: 400px;
-  padding: 36px 32px 32px;
+  max-width: 440px;
+  padding: 38px 34px 34px;
 }
 
 .auth-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--color-primary);
-  margin-bottom: 22px;
+  gap: 12px;
+  margin-bottom: 24px;
 }
 
-.auth-brand span {
+.auth-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.auth-brand-text span:first-child {
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 1rem;
+  font-weight: 700;
+  font-size: 1.25rem;
   color: var(--color-primary-dark);
 }
 
+.auth-brand-sub {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-accent);
+  margin-top: 2px;
+}
+
 .auth-card h1 {
-  font-size: 1.5rem;
+  font-size: 1.48rem;
   margin-bottom: 6px;
+  color: var(--color-primary-dark);
 }
 
 .auth-subtitle {
   color: var(--color-ink-muted);
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   margin-bottom: 24px;
+  line-height: 1.45;
 }
 
 .auth-card form {
@@ -47,7 +63,8 @@
 
 .auth-card .btn-primary {
   width: 100%;
-  margin-top: 4px;
+  margin-top: 6px;
+  padding: 11px;
 }
 
 .auth-row {
@@ -57,7 +74,7 @@
 }
 
 .auth-footer {
-  margin-top: 20px;
+  margin-top: 22px;
   font-size: 0.88rem;
   color: var(--color-ink-muted);
   text-align: center;
@@ -65,5 +82,19 @@
 
 .auth-footer a {
   font-weight: 600;
-  text-decoration: none;
+  color: var(--color-primary);
+  text-decoration: underline;
 }
+
+.auth-security-notice {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.76rem;
+  color: var(--color-ink-light);
+  line-height: 1.35;
+}
+
