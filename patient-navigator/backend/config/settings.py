@@ -208,6 +208,11 @@ if not DEBUG:
 # than continuing to retry indefinitely.
 MAX_AGENT_FAILURES_BEFORE_ESCALATION = config("MAX_AGENT_FAILURES_BEFORE_ESCALATION", default=3, cast=int)
 
+# How long a proposed agent action (e.g. "book this slot?") stays
+# confirmable. After this the patient must ask again, so a stale proposal
+# can't be confirmed hours later against changed availability.
+AGENT_ACTION_TTL_MINUTES = config("AGENT_ACTION_TTL_MINUTES", default=30, cast=int)
+
 # Operational (not clinical) staff-dashboard targets — see
 # escalations/services/escalation_service.py and the staff queue view.
 NORMAL_ESCALATION_TARGET_MINUTES = config("NORMAL_ESCALATION_TARGET_MINUTES", default=60, cast=int)

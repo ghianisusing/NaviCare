@@ -6,8 +6,12 @@ records — see appointments/seed_data.py — never presented as real
 healthcare professionals or a real scheduling system.
 """
 
+from datetime import timedelta
+
+from django.conf import settings
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 
 from patients.models import Patient
 
@@ -138,6 +142,10 @@ class Appointment(models.Model):
         return f"{self.patient} with {self.provider} at {self.start_time:%Y-%m-%d %H:%M} [{self.status}]"
 
 
+def default_agent_action_expiry():
+    return timezone.now() + timedelta(minutes=settings.AGENT_ACTION_TTL_MINUTES)
+
+
 class AgentAction(models.Model):
     """Audit log of tool calls the agent layer attempted, plus the
     pending-confirmation record for mutating actions (see
@@ -162,6 +170,8 @@ class AgentAction(models.Model):
             "failed",
             "Failed",
         )  # passed validation but execution failed (e.g. race lost)
+        EXECUTING = "executing", "Executing"  # confirmed; claimed by exactly one confirm request
+        EXPIRED = "expired", "Expired"  # not confirmed within AGENT_ACTION_TTL_MINUTES
 
     patient = models.ForeignKey(
         Patient, on_delete=models.CASCADE, related_name="agent_actions"
@@ -181,6 +191,9 @@ class AgentAction(models.Model):
         max_length=16, choices=Status.choices, default=Status.REQUESTED
     )
     result_summary = models.CharField(max_length=255, blank=True)
+
+    # A VALIDATED action can only be confirmed before this time.
+    expires_at = models.DateTimeField(default=default_agent_action_expiry)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

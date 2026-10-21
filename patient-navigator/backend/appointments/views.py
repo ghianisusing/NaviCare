@@ -17,6 +17,7 @@ agents/appointment/service.py.
 from __future__ import annotations
 
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -220,8 +221,23 @@ class AgentActionConfirmView(PatientScopedAppointmentMixin, APIView):
         except AgentAction.DoesNotExist:
             return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if action.status != AgentAction.Status.VALIDATED:
+        # Claim the action with one conditional UPDATE so that of two
+        # concurrent confirms (double click, retry, two tabs) exactly one
+        # moves it VALIDATED -> EXECUTING and runs it.
+        now = timezone.now()
+        claimed = AgentAction.objects.filter(
+            pk=action.pk, status=AgentAction.Status.VALIDATED, expires_at__gt=now
+        ).update(status=AgentAction.Status.EXECUTING, updated_at=now)
+        if not claimed:
+            if AgentAction.objects.filter(
+                pk=action.pk, status=AgentAction.Status.VALIDATED, expires_at__lte=now
+            ).update(status=AgentAction.Status.EXPIRED, updated_at=now):
+                return Response(
+                    {"error": "This request has expired. Please ask again to see current options."},
+                    status=status.HTTP_409_CONFLICT,
+                )
             return Response({"error": "This action can no longer be confirmed."}, status=status.HTTP_409_CONFLICT)
+        action.refresh_from_db()
 
         try:
             result = _execute_agent_action(action)
@@ -237,6 +253,11 @@ class AgentActionConfirmView(PatientScopedAppointmentMixin, APIView):
             action.status = AgentAction.Status.FAILED
             action.save(update_fields=["status", "updated_at"])
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            # Never leave the action stuck in EXECUTING.
+            action.status = AgentAction.Status.FAILED
+            action.save(update_fields=["status", "updated_at"])
+            raise
 
         action.status = AgentAction.Status.EXECUTED
         action.save(update_fields=["status", "updated_at"])
@@ -255,11 +276,14 @@ class AgentActionDeclineView(PatientScopedAppointmentMixin, APIView):
         except AgentAction.DoesNotExist:
             return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if action.status != AgentAction.Status.VALIDATED:
+        # Conditional, so a decline can't overwrite a confirm that is
+        # already executing.
+        declined = AgentAction.objects.filter(pk=action.pk, status=AgentAction.Status.VALIDATED).update(
+            status=AgentAction.Status.DECLINED, updated_at=timezone.now()
+        )
+        if not declined:
             return Response({"error": "This action can no longer be declined."}, status=status.HTTP_409_CONFLICT)
-
-        action.status = AgentAction.Status.DECLINED
-        action.save(update_fields=["status", "updated_at"])
+        action.refresh_from_db()
         return Response({"action": AgentActionSerializer(action).data})
 
 
