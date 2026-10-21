@@ -27,6 +27,7 @@ from .exceptions import (
     AppointmentNotFoundError,
     InvalidAppointmentRequestError,
     NotOwnerError,
+    PatientScheduleConflictError,
     SlotUnavailableError,
 )
 
@@ -96,18 +97,21 @@ def find_available_slots(
     if on_date is not None:
         availability_qs = availability_qs.filter(start_time__date=on_date)
 
-    booked_starts = set(
-        Appointment.objects.filter(
-            provider__in=providers, status=Appointment.Status.SCHEDULED
-        ).values_list("provider_id", "start_time")
-    )
+    booked: dict[int, list[tuple[datetime, datetime]]] = {}
+    for booked_provider_id, booked_start, booked_end in Appointment.objects.filter(
+        provider__in=providers, status=Appointment.Status.SCHEDULED, end_time__gt=now, start_time__lt=window_end
+    ).values_list("provider_id", "start_time", "end_time"):
+        booked.setdefault(booked_provider_id, []).append((booked_start, booked_end))
+
+    def overlaps_booking(provider_id: int, start: datetime, end: datetime) -> bool:
+        return any(b_start < end and b_end > start for b_start, b_end in booked.get(provider_id, ()))
 
     slots: list[Slot] = []
     for window in availability_qs.order_by("start_time"):
         cursor = window.start_time
         while cursor + timedelta(minutes=SLOT_DURATION_MINUTES) <= window.end_time:
             slot_end = cursor + timedelta(minutes=SLOT_DURATION_MINUTES)
-            if cursor > now and (window.provider_id, cursor) not in booked_starts:
+            if cursor > now and not overlaps_booking(window.provider_id, cursor, slot_end):
                 slots.append(
                     Slot(
                         provider_id=window.provider_id,
@@ -158,11 +162,7 @@ def book_appointment(*, patient: Patient, provider_id: int, start_time: datetime
     if not within_availability:
         raise SlotUnavailableError("That slot is outside the provider's availability.")
 
-    already_booked = Appointment.objects.select_for_update().filter(
-        provider=provider, start_time=start_time, status=Appointment.Status.SCHEDULED
-    ).exists()
-    if already_booked:
-        raise SlotUnavailableError("That slot was just booked by someone else.")
+    _check_conflicts(provider=provider, patient=patient, start_time=start_time, end_time=end_time)
 
     # The UniqueConstraint on (provider, start_time) WHERE status='scheduled'
     # is the final backstop if two requests somehow race past the checks
@@ -170,6 +170,37 @@ def book_appointment(*, patient: Patient, provider_id: int, start_time: datetime
     return Appointment.objects.create(
         patient=patient, provider=provider, start_time=start_time, end_time=end_time, reason=reason
     )
+
+
+def _check_conflicts(
+    *,
+    provider: Provider,
+    patient: Patient,
+    start_time: datetime,
+    end_time: datetime,
+    exclude_appointment_id: int | None = None,
+) -> None:
+    """Reject [start_time, end_time) if it overlaps any scheduled
+    appointment of this provider, or any scheduled appointment of this
+    patient with any provider.
+
+    Must run inside the caller's transaction after the provider row is
+    locked. The patient row is locked here too (always provider first,
+    then patient, so two bookings can't deadlock) so one patient's
+    concurrent bookings with different providers are serialized.
+    """
+    Patient.objects.select_for_update().filter(pk=patient.pk).first()
+
+    overlapping = Appointment.objects.filter(
+        status=Appointment.Status.SCHEDULED, start_time__lt=end_time, end_time__gt=start_time
+    )
+    if exclude_appointment_id is not None:
+        overlapping = overlapping.exclude(pk=exclude_appointment_id)
+
+    if overlapping.filter(provider=provider).exists():
+        raise SlotUnavailableError("That slot was just booked by someone else.")
+    if overlapping.filter(patient=patient).exists():
+        raise PatientScheduleConflictError("You already have an appointment that overlaps that time.")
 
 
 def _get_owned_appointment(*, patient: Patient, appointment_id: int) -> Appointment:
@@ -225,14 +256,13 @@ def reschedule_appointment(*, patient: Patient, appointment_id: int, new_start_t
     if not within_availability:
         raise SlotUnavailableError("That slot is outside the provider's availability.")
 
-    conflict = (
-        Appointment.objects.select_for_update()
-        .filter(provider=provider, start_time=new_start_time, status=Appointment.Status.SCHEDULED)
-        .exclude(pk=appointment.pk)
-        .exists()
+    _check_conflicts(
+        provider=provider,
+        patient=patient,
+        start_time=new_start_time,
+        end_time=new_end_time,
+        exclude_appointment_id=appointment.pk,
     )
-    if conflict:
-        raise SlotUnavailableError("That slot was just booked by someone else.")
 
     # Update the existing row in place — the original booking is never
     # dropped before the new time is confirmed available, since this is

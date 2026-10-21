@@ -15,6 +15,11 @@ class SlotUnavailableError(AppointmentError):
     outside any provider availability window)."""
 
 
+class PatientScheduleConflictError(SlotUnavailableError):
+    """The patient already has a scheduled appointment (with any
+    provider) that overlaps the requested time."""
+
+
 class AppointmentNotFoundError(AppointmentError):
     """No appointment matches the given id (scoped to the patient)."""
 
