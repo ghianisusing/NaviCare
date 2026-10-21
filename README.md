@@ -11,6 +11,9 @@ that has the final say. It's built as a multi-agent architecture on top of
 a production-style Django/React stack, not a single prompt wrapped in a
 chat UI.
 
+**New here?** Read the [User Guide](USER_GUIDE.md) for setup, how triage
+works, and how to use NaviCare as a patient, care coordinator, or admin.
+
 ---
 
 ## What it does
@@ -217,3 +220,7 @@ integration.
 
 **NaviCare does not diagnose patients, prescribe medication, or make
 autonomous medical decisions at any point in the system.**
+
+## License
+
+[MIT](LICENSE)
