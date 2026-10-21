@@ -58,6 +58,11 @@ FALLBACK_UNAVAILABLE_RESPONSE = (
 FALLBACK_INVALID_OUTPUT_RESPONSE = (
     "The assistant encountered an unexpected problem. Please try again."
 )
+HUMAN_HANDOFF_RESPONSE = (
+    "A care coordinator is handling this conversation and has been notified of your message. "
+    "They will reply here. If you need urgent help, contact your local emergency number "
+    "or go to the nearest emergency department."
+)
 
 # Everything below is real as of Phase 3/4/5/6 and handled by _route;
 # this table exists purely so a *future*, genuinely unimplemented
@@ -129,6 +134,29 @@ def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTu
             display_urgency="emergency",
             request_id=str(tracer.request_id),
             final_agent="emergency",
+        )
+
+    # A staff member owns this conversation: the AI stays out of it.
+    # This runs after the emergency pre-check, so safety still applies.
+    with tracer.step("escalation", "human_handoff_check") as step:
+        handoff = escalation_service.get_active_human_handoff(conversation=conversation)
+        step.metadata["active"] = handoff is not None
+        if handoff is not None:
+            escalation_service.record_patient_message(escalation=handoff)
+
+    if handoff is not None:
+        agent_output = _human_handoff_output()
+        latency_seconds = time.monotonic() - started_at
+        tracer.finish(status="completed", final_agent="human")
+        _log_turn(conversation=conversation, agent_output=agent_output, succeeded=True, latency_seconds=latency_seconds)
+        return NavigatorTurnResult(
+            response_text=agent_output.response,
+            agent_output=agent_output,
+            latency_seconds=latency_seconds,
+            succeeded=True,
+            escalation_id=handoff.id,
+            request_id=str(tracer.request_id),
+            final_agent="human",
         )
 
     try:
@@ -312,6 +340,17 @@ def _emergency_output() -> AgentOutput:
         response=safety.SAFETY_RESPONSE,
         clarifying_question=None,
         target_agent="escalation",
+    )
+
+
+def _human_handoff_output() -> AgentOutput:
+    return AgentOutput(
+        intent="HUMAN_ASSISTANCE",
+        urgency="unknown",
+        needs_clarification=False,
+        recommended_action="RESPOND",
+        response=HUMAN_HANDOFF_RESPONSE,
+        target_agent=None,
     )
 
 

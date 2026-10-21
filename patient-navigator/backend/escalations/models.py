@@ -92,6 +92,9 @@ class EscalationEvent(models.Model):
         STAFF_RESPONSE_SENT = "staff_response_sent", "Staff Response Sent"
         RESOLVED = "resolved", "Resolved"
         CANCELLED = "cancelled", "Cancelled"
+        # The patient wrote while a human owned the conversation, so the AI
+        # stayed silent and staff need to look (see agents/navigator/service.py).
+        PATIENT_MESSAGE_RECEIVED = "patient_message_received", "Patient Message Received"
 
     escalation = models.ForeignKey(Escalation, on_delete=models.CASCADE, related_name="events")
     actor = models.ForeignKey(

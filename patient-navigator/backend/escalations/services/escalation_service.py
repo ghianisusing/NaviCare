@@ -27,6 +27,8 @@ from .exceptions import AlreadyAssignedError, EscalationNotFoundError, InvalidEs
 
 OPEN_STATUSES = (Escalation.Status.PENDING, Escalation.Status.ASSIGNED, Escalation.Status.IN_PROGRESS)
 CLAIMABLE_STATUSES = (Escalation.Status.PENDING, Escalation.Status.ASSIGNED)
+# A human has taken the conversation over; the AI must not reply.
+HUMAN_HANDOFF_STATUSES = (Escalation.Status.ASSIGNED, Escalation.Status.IN_PROGRESS)
 
 MAX_SUMMARY_ITEMS = 5
 
@@ -105,6 +107,23 @@ def create_escalation(
 
 def _find_open_escalation(conversation: Conversation) -> Escalation | None:
     return Escalation.objects.filter(conversation=conversation, status__in=OPEN_STATUSES).first()
+
+
+def get_active_human_handoff(*, conversation: Conversation) -> Escalation | None:
+    """The escalation through which a staff member currently owns this
+    conversation, if any. A PENDING escalation doesn't count: until
+    someone claims it the assistant keeps helping."""
+    return Escalation.objects.filter(conversation=conversation, status__in=HUMAN_HANDOFF_STATUSES).first()
+
+
+def record_patient_message(*, escalation: Escalation) -> None:
+    """Tell staff the patient wrote while they own the conversation:
+    an audit event (no message content) plus an updated_at bump so the
+    escalation resurfaces in the staff queue."""
+    Escalation.objects.filter(pk=escalation.pk).update(updated_at=timezone.now())
+    EscalationEvent.objects.create(
+        escalation=escalation, actor=None, action=EscalationEvent.Action.PATIENT_MESSAGE_RECEIVED
+    )
 
 
 def get_staff_queue(*, status: str | None = None, assigned_to_id: int | None = None):
