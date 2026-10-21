@@ -25,6 +25,7 @@ import time
 from dataclasses import dataclass, field
 
 from django.conf import settings
+from django.db.models import F
 
 from agents.core.exceptions import AgentError, InvalidAgentOutputError
 from agents.core.llm import LLMMessage, get_llm_provider
@@ -34,6 +35,7 @@ from agents.escalation.prompts import build_escalation_response
 from agents.follow_up.service import handle_follow_up_request
 from agents.information.service import handle_information_request
 from agents.triage.service import handle_symptom_concern
+from conversations.models import Conversation
 from escalations.models import Escalation
 from escalations.services import escalation_service
 from escalations.services.exceptions import EscalationError
@@ -329,13 +331,16 @@ def _apply_failure_tracking(*, conversation, succeeded: bool, route_result: Rout
         return route_result.response_text, route_result.escalation_id, succeeded
 
     if succeeded:
-        if conversation.consecutive_agent_failures:
-            conversation.consecutive_agent_failures = 0
-            conversation.save(update_fields=["consecutive_agent_failures"])
+        _reset_failure_counter(conversation)
         return route_result.response_text, None, succeeded
 
-    conversation.consecutive_agent_failures += 1
-    conversation.save(update_fields=["consecutive_agent_failures"])
+    # Increment in the database, not from the in-memory value: concurrent
+    # turns on the same conversation would otherwise overwrite each
+    # other's increments and could keep the count below the threshold.
+    Conversation.objects.filter(pk=conversation.pk).update(
+        consecutive_agent_failures=F("consecutive_agent_failures") + 1
+    )
+    conversation.refresh_from_db(fields=["consecutive_agent_failures"])
 
     if conversation.consecutive_agent_failures < settings.MAX_AGENT_FAILURES_BEFORE_ESCALATION:
         return route_result.response_text, None, succeeded
@@ -351,13 +356,19 @@ def _apply_failure_tracking(*, conversation, succeeded: bool, route_result: Rout
         logger.warning("Auto-escalation after repeated failures could not be created: %s", exc)
         return route_result.response_text, None, succeeded
 
-    conversation.consecutive_agent_failures = 0
-    conversation.save(update_fields=["consecutive_agent_failures"])
+    _reset_failure_counter(conversation)
 
     response_text = build_escalation_response(Escalation.Reason.REPEATED_FAILURE)
     # The hand-off to a human succeeded even though the agent attempts
     # before it didn't — report this turn as successful.
     return response_text, escalation.id, True
+
+
+def _reset_failure_counter(conversation) -> None:
+    Conversation.objects.filter(pk=conversation.pk, consecutive_agent_failures__gt=0).update(
+        consecutive_agent_failures=0
+    )
+    conversation.consecutive_agent_failures = 0
 
 
 def _emergency_output() -> AgentOutput:
