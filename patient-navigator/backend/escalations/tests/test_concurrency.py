@@ -73,3 +73,64 @@ class AssignEscalationRaceTests(TransactionTestCase):
             EscalationEvent.objects.filter(escalation=self.escalation, action=EscalationEvent.Action.ASSIGNED).count(),
             1,
         )
+
+
+class DuplicateOpenEscalationTests(TestCase):
+    def setUp(self):
+        _make_world(self)
+
+    def test_database_rejects_second_open_escalation_for_conversation(self):
+        from django.db import IntegrityError, transaction
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Escalation.objects.create(
+                    patient=self.patient, conversation=self.conversation, reason=Escalation.Reason.OUT_OF_SCOPE
+                )
+
+    def test_closed_escalation_does_not_block_a_new_one(self):
+        escalation_service.resolve_escalation(staff_user=self.staff_a, escalation_id=self.escalation.pk)
+        new = escalation_service.create_escalation(
+            patient=self.patient, conversation=self.conversation, reason=Escalation.Reason.OUT_OF_SCOPE
+        )
+        self.assertNotEqual(new.pk, self.escalation.pk)
+
+    def test_create_that_loses_the_race_returns_the_existing_escalation(self):
+        # Replay the race: our existence check ran before the other
+        # request's insert, so it saw nothing.
+        real_find = escalation_service._find_open_escalation
+        with mock.patch.object(escalation_service, "_find_open_escalation", side_effect=[None, real_find(self.conversation)]):
+            result = escalation_service.create_escalation(
+                patient=self.patient, conversation=self.conversation, reason=Escalation.Reason.OUT_OF_SCOPE
+            )
+
+        self.assertEqual(result.pk, self.escalation.pk)
+        self.assertEqual(Escalation.objects.filter(conversation=self.conversation).count(), 1)
+
+    def test_constraint_statuses_match_service_open_statuses(self):
+        constraint = next(
+            c for c in Escalation._meta.constraints if c.name == "unique_open_escalation_per_conversation"
+        )
+        self.assertEqual(sorted(dict(constraint.condition.children)["status__in"]), sorted(escalation_service.OPEN_STATUSES))
+
+
+@requires_postgres
+class CreateEscalationRaceTests(TransactionTestCase):
+    def setUp(self):
+        _make_world(self)
+        escalation_service.cancel_escalation(escalation_id=self.escalation.pk)
+
+    def test_concurrent_creates_yield_one_open_escalation(self):
+        def create():
+            return escalation_service.create_escalation(
+                patient=self.patient, conversation=self.conversation, reason=Escalation.Reason.PATIENT_REQUEST
+            )
+
+        outcomes = run_concurrently(create, create, create)
+
+        self.assertTrue(all(isinstance(o, Escalation) for o in outcomes), outcomes)
+        self.assertEqual(len({o.pk for o in outcomes}), 1)
+        self.assertEqual(
+            Escalation.objects.filter(conversation=self.conversation, status__in=escalation_service.OPEN_STATUSES).count(),
+            1,
+        )

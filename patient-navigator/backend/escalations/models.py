@@ -13,6 +13,7 @@ row; it is handled immediately and does not wait in a support queue.
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 from conversations.models import Conversation
 from patients.models import Patient
@@ -62,6 +63,17 @@ class Escalation(models.Model):
     class Meta:
         ordering = ["-priority", "created_at"]
         indexes = [models.Index(fields=["status", "priority"])]
+        constraints = [
+            # At most one open escalation per conversation, enforced by the
+            # database so concurrent create_escalation calls can't both
+            # insert. escalation_service.create_escalation catches the
+            # IntegrityError and returns the existing row.
+            models.UniqueConstraint(
+                fields=["conversation"],
+                condition=Q(status__in=["pending", "assigned", "in_progress"]),
+                name="unique_open_escalation_per_conversation",
+            ),
+        ]
 
     def __str__(self):
         return f"Escalation #{self.id} [{self.status}] for {self.patient} ({self.reason})"

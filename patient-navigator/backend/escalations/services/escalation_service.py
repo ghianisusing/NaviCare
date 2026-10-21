@@ -12,7 +12,7 @@ rather than piling up.
 
 from __future__ import annotations
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -76,19 +76,35 @@ def create_escalation(
     if priority not in Escalation.Priority.values:
         raise InvalidEscalationRequestError(f"Invalid escalation priority: {priority!r}")
 
-    existing = Escalation.objects.filter(conversation=conversation, status__in=OPEN_STATUSES).first()
+    existing = _find_open_escalation(conversation)
     if existing is not None:
         return existing  # idempotent — never stack duplicate open escalations for one conversation
 
-    escalation = Escalation.objects.create(
-        patient=patient,
-        conversation=conversation,
-        reason=reason,
-        priority=priority,
-        summary=build_internal_summary(conversation=conversation, patient=patient),
-    )
+    try:
+        # Savepoint, so losing the race below doesn't break the caller's
+        # transaction.
+        with transaction.atomic():
+            escalation = Escalation.objects.create(
+                patient=patient,
+                conversation=conversation,
+                reason=reason,
+                priority=priority,
+                summary=build_internal_summary(conversation=conversation, patient=patient),
+            )
+    except IntegrityError:
+        # A concurrent request opened one between our check and insert
+        # (unique_open_escalation_per_conversation). Return theirs.
+        existing = _find_open_escalation(conversation)
+        if existing is None:
+            raise
+        return existing
+
     EscalationEvent.objects.create(escalation=escalation, actor=None, action=EscalationEvent.Action.CREATED)
     return escalation
+
+
+def _find_open_escalation(conversation: Conversation) -> Escalation | None:
+    return Escalation.objects.filter(conversation=conversation, status__in=OPEN_STATUSES).first()
 
 
 def get_staff_queue(*, status: str | None = None, assigned_to_id: int | None = None):
