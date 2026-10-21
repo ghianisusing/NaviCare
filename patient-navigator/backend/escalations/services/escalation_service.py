@@ -13,6 +13,7 @@ rather than piling up.
 from __future__ import annotations
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from appointments.models import AgentAction, Appointment
@@ -25,6 +26,7 @@ from ..models import Escalation, EscalationEvent
 from .exceptions import AlreadyAssignedError, EscalationNotFoundError, InvalidEscalationRequestError
 
 OPEN_STATUSES = (Escalation.Status.PENDING, Escalation.Status.ASSIGNED, Escalation.Status.IN_PROGRESS)
+CLAIMABLE_STATUSES = (Escalation.Status.PENDING, Escalation.Status.ASSIGNED)
 
 MAX_SUMMARY_ITEMS = 5
 
@@ -113,14 +115,26 @@ def _get_escalation(escalation_id: int) -> Escalation:
 def assign_escalation(*, staff_user, escalation_id: int) -> Escalation:
     escalation = _get_escalation(escalation_id)
 
-    if escalation.status not in (Escalation.Status.PENDING, Escalation.Status.ASSIGNED):
+    if escalation.status not in CLAIMABLE_STATUSES:
         raise InvalidEscalationRequestError("This escalation is no longer open for assignment.")
     if escalation.assigned_to_id is not None and escalation.assigned_to_id != staff_user.id:
         raise AlreadyAssignedError("This escalation has already been claimed by another staff member.")
 
-    escalation.assigned_to = staff_user
-    escalation.status = Escalation.Status.ASSIGNED
-    escalation.save(update_fields=["assigned_to", "status", "updated_at"])
+    # The checks above read a snapshot that a concurrent claim can
+    # invalidate. The claim itself is one conditional UPDATE: the database
+    # re-checks "still claimable by me" on the current row, so of two
+    # staff members racing for the same escalation exactly one wins.
+    claimed = (
+        Escalation.objects.filter(pk=escalation.pk, status__in=CLAIMABLE_STATUSES)
+        .filter(Q(assigned_to__isnull=True) | Q(assigned_to=staff_user))
+        .update(assigned_to=staff_user, status=Escalation.Status.ASSIGNED, updated_at=timezone.now())
+    )
+    escalation.refresh_from_db()
+    if not claimed:
+        if escalation.status not in CLAIMABLE_STATUSES:
+            raise InvalidEscalationRequestError("This escalation is no longer open for assignment.")
+        raise AlreadyAssignedError("This escalation has already been claimed by another staff member.")
+
     EscalationEvent.objects.create(escalation=escalation, actor=staff_user, action=EscalationEvent.Action.ASSIGNED)
     return escalation
 
