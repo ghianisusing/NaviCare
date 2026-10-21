@@ -17,8 +17,9 @@ import logging
 import re
 from dataclasses import dataclass
 
+from . import baseline
+from .baseline import EMERGENCY_RESPONSE
 from .models import SafetyRule
-from .rules import EMERGENCY_RESPONSE
 
 logger = logging.getLogger("safety")
 
@@ -30,15 +31,9 @@ SEVERITY_ORDER = {
     "emergency": 3,
 }
 
-# Guaranteed to be checked regardless of database state. Deliberately a
-# subset of safety/rules.py's emergency patterns — this is the fail-safe
-# floor, not a replacement for the full configurable rule set.
-_BASELINE_EMERGENCY_PATTERN = re.compile(
-    r"\bchest pain\b|\b(can'?t|cannot|difficulty|trouble)\s+breath|\bnot breathing\b"
-    r"|\bstroke\b|\bsevere (bleeding|blood loss)\b|\bunconscious\b"
-    r"|\b(suicid|kill myself|end my life)\w*\b|\bhurt(ing)?\s+myself\b|\bseizure\b",
-    re.IGNORECASE,
-)
+# Guaranteed to be checked regardless of database state. Shared with the
+# navigator pre-check via safety/baseline.py.
+_BASELINE_EMERGENCY_PATTERN = baseline.EMERGENCY_REGEX
 
 
 @dataclass

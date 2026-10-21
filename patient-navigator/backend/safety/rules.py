@@ -11,14 +11,8 @@ These are intentionally high-level, conservative warning-sign patterns,
 not an exhaustive medical triage system — see the Phase 3 scope notes.
 """
 
+from .baseline import EMERGENCY_PATTERN_GROUPS, EMERGENCY_RESPONSE
 from .models import SafetyRule
-
-EMERGENCY_RESPONSE = (
-    "I'm concerned that what you're describing may need urgent medical "
-    "attention. Please seek immediate care — contact your local "
-    "emergency number or go to the nearest emergency department. If you "
-    "are in immediate danger, please do not wait for a reply here."
-)
 
 URGENT_RESPONSE = (
     "What you're describing sounds like it should be evaluated by a "
@@ -29,47 +23,17 @@ URGENT_RESPONSE = (
 
 DEFAULT_RULES = [
     # --- Emergency ---------------------------------------------------
-    dict(
-        name="Chest pain or difficulty breathing",
-        category=SafetyRule.Category.CARDIAC_RESPIRATORY,
-        trigger=r"\bchest pain\b|\b(can'?t|cannot|difficulty|trouble)\s+breath|\bshort(ness)? of breath\b|\bnot breathing\b",
-        severity=SafetyRule.Severity.EMERGENCY,
-        response=EMERGENCY_RESPONSE,
-    ),
-    dict(
-        name="Stroke warning signs",
-        category=SafetyRule.Category.NEUROLOGICAL,
-        trigger=r"\bstroke\b|\bface (is )?drooping\b|\bslurred speech\b|\bsudden (weakness|numbness)\b|\bworst headache of my life\b",
-        severity=SafetyRule.Severity.EMERGENCY,
-        response=EMERGENCY_RESPONSE,
-    ),
-    dict(
-        name="Severe bleeding or trauma",
-        category=SafetyRule.Category.BLEEDING_TRAUMA,
-        trigger=r"\bsevere (bleeding|blood loss)\b|\bcan'?t stop bleeding\b|\bunconscious\b",
-        severity=SafetyRule.Severity.EMERGENCY,
-        response=EMERGENCY_RESPONSE,
-    ),
-    dict(
-        name="Suicidal ideation or self-harm",
-        category=SafetyRule.Category.MENTAL_HEALTH_CRISIS,
-        trigger=r"\b(suicid|kill myself|end my life)\w*\b|\bhurt(ing)?\s+myself\b|\boverdose\b",
-        severity=SafetyRule.Severity.EMERGENCY,
-        response=EMERGENCY_RESPONSE,
-    ),
-    dict(
-        name="Seizure or loss of consciousness",
-        category=SafetyRule.Category.NEUROLOGICAL,
-        trigger=r"\bseizure\b|\bpassed out\b|\blost consciousness\b",
-        severity=SafetyRule.Severity.EMERGENCY,
-        response=EMERGENCY_RESPONSE,
-    ),
-    dict(
-        name="Severe allergic reaction",
-        category=SafetyRule.Category.ALLERGIC_REACTION,
-        trigger=r"\banaphylax\w*\b|\ballergic reaction\b.*\b(throat|swelling|breath)\b",
-        severity=SafetyRule.Severity.EMERGENCY,
-        response=EMERGENCY_RESPONSE,
+    # Generated from safety/baseline.py so the seeded DB rules can't drift
+    # from the hardcoded fail-safe patterns.
+    *(
+        dict(
+            name=group.rule_name,
+            category=group.category,
+            trigger=group.trigger,
+            severity=SafetyRule.Severity.EMERGENCY,
+            response=EMERGENCY_RESPONSE,
+        )
+        for group in EMERGENCY_PATTERN_GROUPS
     ),
     # --- Urgent --------------------------------------------------------
     dict(
