@@ -22,6 +22,7 @@ from agents.core.exceptions import AgentError
 from appointments.models import AgentAction, Provider
 from appointments.services.appointment_service import get_owned_appointment
 from appointments.services.exceptions import AppointmentError
+from core.datetime_format import format_patient_datetime
 from tools.exceptions import InvalidToolArgumentsError
 from tools.registry import validate_and_prepare
 
@@ -147,13 +148,13 @@ def _validate_and_summarize(tool_name: str, patient, arguments: dict) -> str:
         except Provider.DoesNotExist as exc:
             raise AppointmentError("I couldn't find that provider anymore. Let's search again.") from exc
         start = arguments["start_time"]
-        return f"Book with {provider.display_name} ({provider.department.name}) at {start:%A, %B %-d, %Y · %-I:%M %p}"
+        return f"Book with {provider.display_name} ({provider.department.name}) at {format_patient_datetime(start, patient, with_year=True)}"
 
     if tool_name == "cancel_appointment":
         appointment = get_owned_appointment(patient=patient, appointment_id=arguments["appointment_id"])
         return (
             f"Cancel your appointment with {appointment.provider.display_name} "
-            f"on {appointment.start_time:%A, %B %-d, %Y · %-I:%M %p}"
+            f"on {format_patient_datetime(appointment.start_time, patient, with_year=True)}"
         )
 
     if tool_name == "reschedule_appointment":
@@ -161,7 +162,7 @@ def _validate_and_summarize(tool_name: str, patient, arguments: dict) -> str:
         new_start = arguments["new_start_time"]
         return (
             f"Move your appointment with {appointment.provider.display_name} "
-            f"to {new_start:%A, %B %-d, %Y · %-I:%M %p}"
+            f"to {format_patient_datetime(new_start, patient, with_year=True)}"
         )
 
     raise AppointmentError("Unsupported action.")

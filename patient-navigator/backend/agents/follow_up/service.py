@@ -16,6 +16,7 @@ import time
 
 from agents.core.exceptions import AgentError
 from appointments.models import AgentAction
+from core.datetime_format import format_patient_datetime
 from follow_ups.services import follow_up_service
 from follow_ups.services.exceptions import FollowUpError
 from tools.exceptions import InvalidToolArgumentsError
@@ -133,7 +134,7 @@ def _validate_and_summarize(tool_name: str, patient, arguments: dict) -> str:
 
     if tool_name == "cancel_reminder":
         reminder = follow_up_service.get_owned_reminder(patient=patient, reminder_id=arguments["reminder_id"])
-        return f"Cancel reminder for \"{reminder.follow_up.title}\" ({reminder.scheduled_for:%A, %B %-d · %-I:%M %p})"
+        return f"Cancel reminder for \"{reminder.follow_up.title}\" ({format_patient_datetime(reminder.scheduled_for, patient)})"
 
     raise FollowUpError("Unsupported action.")
 

@@ -25,6 +25,7 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 
+from core.datetime_format import format_patient_datetime
 from follow_ups.models import FollowUp, Reminder
 from follow_ups.services.follow_up_service import get_due_reminders, mark_expired_follow_ups
 
@@ -39,7 +40,7 @@ def _build_message(follow_up: FollowUp) -> tuple[str, str]:
         title = "Upcoming appointment"
         message = (
             f"Reminder: your appointment with {appointment.provider.display_name} is coming up "
-            f"({appointment.start_time:%A, %B %-d at %-I:%M %p})."
+            f"({format_patient_datetime(appointment.start_time, follow_up.patient, joiner=' at ')})."
         )
         return title, message
 

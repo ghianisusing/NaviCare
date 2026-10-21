@@ -115,3 +115,32 @@ class RunMaintenanceCycleTests(TestCase):
 
         self.assertEqual(result["reminders_sent"], 1)
         self.assertEqual(result["follow_ups_expired"], 1)
+
+
+class AppointmentReminderFormattingTests(TestCase):
+    """Regression: the reminder text used %-d / %-I (ValueError on
+    Windows) and showed UTC instead of the patient's local time."""
+
+    def test_appointment_reminder_shows_patient_local_time(self):
+        import datetime as dt
+
+        from appointments.models import Appointment, Department, Provider
+
+        user = User.objects.create_user(username="tz_patient", password="S0meStrongPass!")
+        patient = Patient.objects.create(
+            user=user, first_name="Tz", last_name="Patient", timezone="America/New_York"
+        )
+        provider = Provider.objects.create(
+            department=Department.objects.create(name="Allergy"), first_name="Ida", last_name="Moss", title="MD"
+        )
+        start = dt.datetime(2030, 3, 5, 14, 0, tzinfo=dt.timezone.utc)  # 9:00 AM EST
+        appointment = Appointment.objects.create(
+            patient=patient, provider=provider, start_time=start, end_time=start + timedelta(minutes=30)
+        )
+        follow_up = FollowUp.objects.create(patient=patient, title="Appointment", appointment=appointment)
+        Reminder.objects.create(follow_up=follow_up, scheduled_for=timezone.now() - timedelta(minutes=1))
+
+        process_due_reminders(as_of=timezone.now())
+
+        notification = Notification.objects.get(patient=patient)
+        self.assertIn("Tuesday, March 5 at 9:00 AM EST", notification.message)
