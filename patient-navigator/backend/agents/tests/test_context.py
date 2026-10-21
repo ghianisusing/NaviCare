@@ -41,3 +41,26 @@ class BuildContextTests(TestCase):
         self.assertEqual(len(context.history), MAX_CONTEXT_MESSAGES)
         # Should keep the *most recent* messages, not the oldest.
         self.assertEqual(context.history[-1].content, f"message {MAX_CONTEXT_MESSAGES + 9}")
+
+    def test_current_message_excluded_when_it_is_the_latest_saved_row(self):
+        Message.objects.create(conversation=self.conversation, role="user", content="earlier")
+        Message.objects.create(conversation=self.conversation, role="assistant", content="reply")
+        Message.objects.create(conversation=self.conversation, role="user", content="now")
+
+        context = build_context(conversation=self.conversation, current_message="now")
+        self.assertEqual([m.content for m in context.history], ["earlier", "reply"])
+
+    def test_current_message_kept_when_latest_row_differs(self):
+        Message.objects.create(conversation=self.conversation, role="user", content="earlier")
+
+        context = build_context(conversation=self.conversation, current_message="not saved yet")
+        self.assertEqual([m.content for m in context.history], ["earlier"])
+
+    def test_window_stays_full_after_excluding_current_message(self):
+        for i in range(MAX_CONTEXT_MESSAGES + 5):
+            Message.objects.create(conversation=self.conversation, role="user", content=f"message {i}")
+
+        latest = f"message {MAX_CONTEXT_MESSAGES + 4}"
+        context = build_context(conversation=self.conversation, current_message=latest)
+        self.assertEqual(len(context.history), MAX_CONTEXT_MESSAGES)
+        self.assertEqual(context.history[-1].content, f"message {MAX_CONTEXT_MESSAGES + 3}")

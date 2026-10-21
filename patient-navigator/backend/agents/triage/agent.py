@@ -21,7 +21,7 @@ def run_triage(*, conversation, patient_message: str) -> TriageOutput:
     call fails or returns unusable output — callers (agents/triage/service.py)
     are responsible for the safe fallback in that case.
     """
-    context = build_context(conversation=conversation)
+    context = build_context(conversation=conversation, current_message=patient_message)
     provider = get_llm_provider()
 
     system_prompt = _compose_system_prompt(context.summary)

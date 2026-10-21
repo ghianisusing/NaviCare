@@ -58,7 +58,7 @@ def run_appointment_agent(*, conversation, patient, patient_message: str) -> App
     the first call's output plus the raw tool result, rather than
     raising — see the fallback in the try/except below.
     """
-    context = build_context(conversation=conversation)
+    context = build_context(conversation=conversation, current_message=patient_message)
     provider = get_llm_provider()
     system_prompt = build_appointment_system_prompt()
 

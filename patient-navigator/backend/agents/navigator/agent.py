@@ -25,7 +25,7 @@ def run_navigator(*, conversation, patient_message: str) -> AgentOutput:
     Callers (agents/navigator/service.py) are responsible for turning
     that into a safe fallback — this function never guesses a result.
     """
-    context = build_context(conversation=conversation)
+    context = build_context(conversation=conversation, current_message=patient_message)
     provider = get_llm_provider()
 
     system_prompt = _compose_system_prompt(context)

@@ -31,17 +31,38 @@ class ConversationContext:
     history: list[LLMMessage]
 
 
-def build_context(*, conversation, max_messages: int = MAX_CONTEXT_MESSAGES) -> ConversationContext:
+def build_context(
+    *,
+    conversation,
+    current_message: str | None = None,
+    max_messages: int = MAX_CONTEXT_MESSAGES,
+) -> ConversationContext:
     """Build the bounded context for a conversation.
 
     `conversation` is a `conversations.models.Conversation` instance.
     Only `user` and `assistant` roles are forwarded to the LLM; any
     `system` rows (reserved for future internal annotations) are
     excluded from the turn history.
+
+    `current_message` is the patient message being answered this turn.
+    The chat service saves it before the agents run, and every agent
+    appends it to the turn list itself, so when the newest stored row is
+    that same user message it is left out here. Otherwise the LLM would
+    see the patient's message twice.
     """
     recent_messages = list(
-        conversation.messages.filter(role__in=["user", "assistant"]).order_by("-created_at")[:max_messages]
+        conversation.messages.filter(role__in=["user", "assistant"]).order_by("-created_at", "-id")[
+            : max_messages + 1
+        ]
     )
+    if (
+        current_message is not None
+        and recent_messages
+        and recent_messages[0].role == "user"
+        and recent_messages[0].content == current_message
+    ):
+        recent_messages = recent_messages[1:]
+    recent_messages = recent_messages[:max_messages]
     recent_messages.reverse()
 
     history = [LLMMessage(role=m.role, content=m.content) for m in recent_messages]

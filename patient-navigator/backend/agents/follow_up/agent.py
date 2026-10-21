@@ -32,7 +32,7 @@ class FollowUpAgentResult:
 
 
 def run_follow_up_agent(*, conversation, patient, patient_message: str) -> FollowUpAgentResult:
-    context = build_context(conversation=conversation)
+    context = build_context(conversation=conversation, current_message=patient_message)
     provider = get_llm_provider()
     system_prompt = build_follow_up_system_prompt(
         current_datetime_iso=timezone.now().isoformat(), patient_timezone=patient.timezone
