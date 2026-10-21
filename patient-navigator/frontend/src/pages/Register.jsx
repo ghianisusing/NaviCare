@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { extractErrorMessage } from '../api/client'
-import './auth.css'
+import AuthLayout from '../components/AuthLayout'
+import Icon from '../components/Icon'
 
 export default function Register() {
   const { register } = useAuth()
@@ -36,97 +37,85 @@ export default function Register() {
     }
   }
 
+  const passwordLength = form.password.length
+
   return (
-    <div className="auth-page">
-      <div className="card auth-card">
-        <div className="auth-brand">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M12 2 L20 5.5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5.5 L12 2Z"
-              fill="var(--color-primary-tint)"
-              stroke="var(--color-primary)"
-              strokeWidth="1.8"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M12 7 V15 M8 11 H16"
-              stroke="var(--color-primary)"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-            />
-          </svg>
-          <div className="auth-brand-text">
-            <span>NaviCare</span>
-            <span className="auth-brand-sub">Patient & Care Portal</span>
-          </div>
+    <AuthLayout
+      title="Create your account"
+      subtitle="Manage appointments, follow-ups and get guidance from your Patient Navigator."
+      footer={
+        <>
+          Already have an account? <Link to="/login">Sign in</Link>
+        </>
+      }
+    >
+      {error && (
+        <div className="alert-error" role="alert">
+          <Icon name="info" size={16} />
+          {error}
         </div>
+      )}
 
-        <h1>Create Patient Account</h1>
-        <p className="auth-subtitle">Register to manage appointments, care follow-ups, and receive guidance.</p>
-
-        {error && <div className="alert-error">{error}</div>}
-
-        <form onSubmit={handleSubmit}>
-          <div className="auth-row">
-            <div className="field">
-              <label htmlFor="firstName">Legal First Name</label>
-              <input id="firstName" type="text" value={form.firstName} onChange={update('firstName')} required />
-            </div>
-            <div className="field">
-              <label htmlFor="lastName">Legal Last Name</label>
-              <input id="lastName" type="text" value={form.lastName} onChange={update('lastName')} required />
-            </div>
+      <form onSubmit={handleSubmit} className="auth-form">
+        <div className="auth-row">
+          <div className="field">
+            <label htmlFor="firstName">First name</label>
+            <input id="firstName" type="text" autoComplete="given-name" value={form.firstName} onChange={update('firstName')} required />
           </div>
           <div className="field">
-            <label htmlFor="username">Preferred Username</label>
-            <input
-              id="username"
-              type="text"
-              autoComplete="username"
-              value={form.username}
-              onChange={update('username')}
-              required
-            />
+            <label htmlFor="lastName">Last name</label>
+            <input id="lastName" type="text" autoComplete="family-name" value={form.lastName} onChange={update('lastName')} required />
           </div>
-          <div className="field">
-            <label htmlFor="email">Email Address</label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="name@example.com"
-              value={form.email}
-              onChange={update('email')}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="password">Password (Minimum 10 characters)</label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              value={form.password}
-              onChange={update('password')}
-              minLength={10}
-              required
-            />
-          </div>
-          <button className="btn btn-primary" type="submit" disabled={submitting}>
-            {submitting ? 'Creating Patient Record…' : 'Register Account'}
-          </button>
-        </form>
-
-        <div className="auth-footer">
-          Already registered? <Link to="/login">Sign in to your record</Link>
         </div>
-
-        <div className="auth-security-notice">
-          <span aria-hidden="true">🔒</span>
-          <span>Your personal medical records are isolated and protected under strict healthcare privacy controls.</span>
+        <div className="field">
+          <label htmlFor="username">Username</label>
+          <input
+            id="username"
+            type="text"
+            autoComplete="username"
+            value={form.username}
+            onChange={update('username')}
+            required
+          />
         </div>
-      </div>
-    </div>
+        <div className="field">
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="email"
+            placeholder="name@example.com"
+            value={form.email}
+            onChange={update('email')}
+            required
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            value={form.password}
+            onChange={update('password')}
+            minLength={10}
+            aria-describedby="password-hint"
+            required
+          />
+          <span id="password-hint" className={`field-hint ${passwordLength >= 10 ? 'field-hint-ok' : ''}`}>
+            {passwordLength >= 10 ? (
+              <>
+                <Icon name="check" size={13} strokeWidth={2.4} /> Looks good
+              </>
+            ) : (
+              'At least 10 characters'
+            )}
+          </span>
+        </div>
+        <button className="btn btn-primary btn-lg btn-block" type="submit" disabled={submitting}>
+          {submitting ? 'Creating account…' : 'Create account'}
+        </button>
+      </form>
+    </AuthLayout>
   )
 }
-

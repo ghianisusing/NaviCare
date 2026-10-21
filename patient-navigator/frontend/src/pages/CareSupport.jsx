@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listEscalations } from '../api/escalations'
 import { extractErrorMessage } from '../api/client'
+import Icon from '../components/Icon'
 import './care-support.css'
 
 const STATUS_LABELS = {
@@ -10,6 +11,14 @@ const STATUS_LABELS = {
   in_progress: 'In Progress',
   resolved: 'Resolved',
   cancelled: 'Cancelled',
+}
+
+const STATUS_BADGE = {
+  pending: 'badge-warning',
+  assigned: 'badge-primary',
+  in_progress: 'badge-primary',
+  resolved: 'badge-success',
+  cancelled: 'badge-neutral',
 }
 
 const REASON_LABELS = {
@@ -56,30 +65,41 @@ export default function CareSupport() {
   }
 
   return (
-    <div className="care-support-page">
-      <h1>Care Support</h1>
-      <p className="dashboard-subtitle">Escalations awaiting a human care coordinator.</p>
+    <div className="page care-support-page">
+      <header className="page-header">
+        <div>
+          <h1 className="page-title">Care support</h1>
+          <p className="page-subtitle">Conversations the Navigator handed over to a person.</p>
+        </div>
+      </header>
 
-      <div className="care-support-overview">
-        <div className="care-support-stat">
-          <span className="care-support-stat-value">{counts.pending}</span>
-          <span className="care-support-stat-label">Pending</span>
+      <section className="stat-grid" aria-label="Queue overview">
+        <div className="stat-tile">
+          <span className="stat-label">
+            <span className="legend-dot warning" /> Waiting
+          </span>
+          <span className="stat-value">{counts.pending}</span>
         </div>
-        <div className="care-support-stat">
-          <span className="care-support-stat-value">{counts.in_progress}</span>
-          <span className="care-support-stat-label">In Progress</span>
+        <div className="stat-tile">
+          <span className="stat-label">
+            <span className="legend-dot primary" /> In progress
+          </span>
+          <span className="stat-value">{counts.in_progress}</span>
         </div>
-        <div className="care-support-stat">
-          <span className="care-support-stat-value">{counts.resolved}</span>
-          <span className="care-support-stat-label">Resolved</span>
+        <div className="stat-tile">
+          <span className="stat-label">
+            <span className="legend-dot success" /> Resolved
+          </span>
+          <span className="stat-value">{counts.resolved}</span>
         </div>
-      </div>
+      </section>
 
-      <div className="care-support-filters">
+      <div className="segmented" role="group" aria-label="Filter by status">
         {['', 'pending', 'assigned', 'in_progress', 'resolved'].map((value) => (
           <button
             key={value || 'all'}
-            className={`care-support-filter-btn ${statusFilter === value ? 'active' : ''}`}
+            className={statusFilter === value ? 'active' : ''}
+            aria-pressed={statusFilter === value}
             onClick={() => setStatusFilter(value)}
           >
             {value ? STATUS_LABELS[value] : 'All'}
@@ -87,34 +107,65 @@ export default function CareSupport() {
         ))}
       </div>
 
-      {error && <div className="alert-error">{error}</div>}
-      {loading && <p className="dashboard-muted">Loading…</p>}
+      {error && (
+        <div className="alert-error" role="alert">
+          <Icon name="info" size={16} />
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="skeleton-stack" aria-hidden="true">
+          <div className="skeleton" style={{ height: 72 }} />
+          <div className="skeleton" style={{ height: 72 }} />
+          <div className="skeleton" style={{ height: 72 }} />
+        </div>
+      )}
 
       {!loading && escalations.length === 0 && (
-        <div className="card empty-state">
-          <p>No escalations here.</p>
+        <div className="empty-state">
+          <div className="empty-icon">
+            <Icon name="inbox" size={20} />
+          </div>
+          <h3>The queue is clear</h3>
+          <p>No escalations match this filter right now.</p>
         </div>
       )}
 
       {!loading && escalations.length > 0 && (
-        <ul className="escalation-list">
+        <ul className="list-group escalation-list">
           {escalations.map((escalation) => (
-            <li key={escalation.id} className="card escalation-card">
-              <div>
-                <div className={`escalation-priority-badge priority-${escalation.priority}`}>
-                  {escalation.priority === 'high' ? 'High Priority' : 'Normal'}
+            <li key={escalation.id}>
+              <Link className="escalation-row" to={`/care-support/${escalation.id}`}>
+                <span className={`priority-bar priority-${escalation.priority}`} aria-hidden="true" />
+                <div className="escalation-body">
+                  <div className="escalation-title-row">
+                    <span className="escalation-patient">{escalation.patient_name}</span>
+                    {escalation.priority === 'high' && <span className="badge badge-danger">High priority</span>}
+                  </div>
+                  <div className="escalation-meta">
+                    <span>{REASON_LABELS[escalation.reason] || escalation.reason}</span>
+                    <span className="dot-sep" aria-hidden="true" />
+                    <span>
+                      {new Date(escalation.created_at).toLocaleString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                    {escalation.assigned_to_username && (
+                      <>
+                        <span className="dot-sep" aria-hidden="true" />
+                        <span>{escalation.assigned_to_username}</span>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="escalation-reason">{REASON_LABELS[escalation.reason] || escalation.reason}</div>
-                <div className="escalation-patient">{escalation.patient_name}</div>
-                <div className="escalation-meta">
-                  {STATUS_LABELS[escalation.status]}
-                  {escalation.assigned_to_username && ` · ${escalation.assigned_to_username}`}
-                  {' · '}
-                  {new Date(escalation.created_at).toLocaleString()}
-                </div>
-              </div>
-              <Link className="btn btn-primary" to={`/care-support/${escalation.id}`}>
-                Open
+                <span className={`badge escalation-status ${STATUS_BADGE[escalation.status] || 'badge-neutral'}`}>
+                  {STATUS_LABELS[escalation.status] || escalation.status}
+                </span>
+                <Icon name="chevronRight" size={16} className="row-chevron" />
               </Link>
             </li>
           ))}

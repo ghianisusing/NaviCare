@@ -2,14 +2,27 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { listNotifications } from '../api/notifications'
+import { createConversation } from '../api/conversations'
+import Icon, { BrandMark } from './Icon'
 import './app-shell.css'
+
+function NavItem({ to, icon, children, badge }) {
+  return (
+    <NavLink to={to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+      <Icon name={icon} size={18} />
+      <span className="nav-item-label">{children}</span>
+      {badge > 0 && <span className="nav-badge">{badge > 99 ? '99+' : badge}</span>}
+    </NavLink>
+  )
+}
 
 export default function AppShell() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [unreadCount, setUnreadCount] = useState(0)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [startingChat, setStartingChat] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -29,151 +42,148 @@ export default function AppShell() {
     }
   }, [location.pathname])
 
+  // Close the mobile drawer whenever the route changes.
+  const [drawerPath, setDrawerPath] = useState(location.pathname)
+  if (drawerPath !== location.pathname) {
+    setDrawerPath(location.pathname)
+    setDrawerOpen(false)
+  }
 
+  useEffect(() => {
+    if (!drawerOpen) return undefined
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') setDrawerOpen(false)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [drawerOpen])
 
   async function handleLogout() {
     await logout()
     navigate('/login')
   }
 
-  const userInitials = user?.username
-    ? user.username.slice(0, 2).toUpperCase()
-    : 'PT'
+  async function handleNewChat() {
+    setStartingChat(true)
+    try {
+      const conversation = await createConversation()
+      navigate(`/chat/${conversation.id}`)
+    } catch {
+      navigate('/dashboard')
+    } finally {
+      setStartingChat(false)
+    }
+  }
+
+  const userInitials = user?.username ? user.username.slice(0, 2).toUpperCase() : 'PT'
+  const roleLabel = user?.is_superuser ? 'Administrator' : user?.is_staff ? 'Care staff' : 'Patient'
+  const isChat = location.pathname.startsWith('/chat/')
 
   return (
-    <div className="shell">
-      {/* Top Clinical Safety / Emergency Banner */}
-      <div className="shell-emergency-bar">
-        <div className="shell-emergency-inner">
-          <span className="emergency-icon" aria-hidden="true">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-          </span>
-          <span className="emergency-text">
-            <strong>Medical Emergency:</strong> For severe chest pain, trouble breathing, or other life-threatening symptoms, contact your local emergency service or go to the nearest emergency department.
-          </span>
-        </div>
-      </div>
-
-      <header className="shell-header">
-        <div className="shell-header-inner">
-          <NavLink to="/dashboard" className="brand" aria-label="NaviCare Home">
-            <span className="brand-mark" aria-hidden="true">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 2 L20 5.5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5.5 L12 2Z"
-                  fill="var(--color-primary-tint)"
-                  stroke="var(--color-primary)"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M12 7 V15 M8 11 H16"
-                  stroke="var(--color-primary)"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </span>
-            <div className="brand-text-group">
-              <span className="brand-title">NaviCare</span>
-              <span className="brand-badge">Patient Portal</span>
-            </div>
+    <div className={`shell ${drawerOpen ? 'drawer-open' : ''}`}>
+      <aside className="sidebar" id="primary-navigation" aria-label="Primary">
+        <div className="sidebar-top">
+          <NavLink to="/dashboard" className="brand" aria-label="NaviCare home">
+            <BrandMark size={30} />
+            <span className="brand-title">NaviCare</span>
           </NavLink>
-
           <button
-            className="shell-menu-toggle"
             type="button"
-            onClick={() => setMobileMenuOpen((prev) => !prev)}
-            aria-label="Toggle navigation menu"
-            aria-expanded={mobileMenuOpen}
+            className="icon-btn sidebar-close"
+            onClick={() => setDrawerOpen(false)}
+            aria-label="Close menu"
+          >
+            <Icon name="x" />
+          </button>
+        </div>
+
+        <button type="button" className="sidebar-cta" onClick={handleNewChat} disabled={startingChat}>
+          <span className="sidebar-cta-icon">
+            <Icon name="sparkle" size={16} />
+          </span>
+          {startingChat ? 'Starting…' : 'Ask the Navigator'}
+        </button>
+
+        <nav className="sidebar-nav">
+          <NavItem to="/dashboard" icon="home">Home</NavItem>
+          <NavItem to="/follow-ups" icon="tasks">Care plan</NavItem>
+          <NavItem to="/notifications" icon="bell" badge={unreadCount}>Notifications</NavItem>
+          <NavItem to="/profile" icon="user">My record</NavItem>
+
+          {(user?.is_staff || user?.is_superuser) && (
+            <>
+              <div className="sidebar-section-label">Workspace</div>
+              {user?.is_staff && <NavItem to="/care-support" icon="headset">Care support</NavItem>}
+              {user?.is_superuser && <NavItem to="/agent-monitoring" icon="activity">System health</NavItem>}
+            </>
+          )}
+        </nav>
+
+        <div className="sidebar-bottom">
+          <div className="emergency-card" role="note">
+            <div className="emergency-card-title">
+              <Icon name="alert" size={15} strokeWidth={2} />
+              Medical emergency?
+            </div>
+            <p>
+              For chest pain, trouble breathing or other life-threatening symptoms, call your local emergency number or
+              go to the nearest emergency department.
+            </p>
+          </div>
+
+          {user && (
+            <div className="sidebar-user">
+              <span className="avatar" aria-hidden="true">{userInitials}</span>
+              <div className="sidebar-user-meta">
+                <span className="sidebar-username">{user.username}</span>
+                <span className="sidebar-role">{roleLabel}</span>
+              </div>
+              <button type="button" className="icon-btn" onClick={handleLogout} aria-label="Sign out" title="Sign out">
+                <Icon name="logout" size={17} />
+              </button>
+            </div>
+          )}
+        </div>
+      </aside>
+
+      <div className="drawer-scrim" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
+
+      <div className="shell-content">
+        <header className="topbar">
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open menu"
+            aria-expanded={drawerOpen}
             aria-controls="primary-navigation"
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              {mobileMenuOpen ? (
-                <>
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </>
-              ) : (
-                <>
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
-                </>
-              )}
-            </svg>
+            <Icon name="menu" size={20} />
+            {unreadCount > 0 && <span className="topbar-dot" aria-hidden="true" />}
           </button>
-
-          <nav
-            id="primary-navigation"
-            className={`shell-nav ${mobileMenuOpen ? 'open' : ''}`}
-            onClick={() => setMobileMenuOpen(false)}
+          <NavLink to="/dashboard" className="brand" aria-label="NaviCare home">
+            <BrandMark size={26} />
+            <span className="brand-title">NaviCare</span>
+          </NavLink>
+          <button
+            type="button"
+            className="icon-btn topbar-ai"
+            onClick={handleNewChat}
+            disabled={startingChat}
+            aria-label="Ask the Navigator"
           >
-            <NavLink to="/dashboard" className={({ isActive }) => (isActive ? 'active' : '')}>
-              Dashboard
-            </NavLink>
-            <NavLink to="/follow-ups" className={({ isActive }) => (isActive ? 'active' : '')}>
-              Care Plan & Tasks
-            </NavLink>
-            <NavLink to="/notifications" className={({ isActive }) => (isActive ? 'active' : '')}>
-              Notifications
-              {unreadCount > 0 && <span className="shell-notification-badge">{unreadCount}</span>}
-            </NavLink>
-            <NavLink to="/profile" className={({ isActive }) => (isActive ? 'active' : '')}>
-              My Record
-            </NavLink>
-            {user?.is_staff && (
-              <NavLink to="/care-support" className={({ isActive }) => (isActive ? 'active' : '')}>
-                Care Support
-              </NavLink>
-            )}
-            {user?.is_superuser && (
-              <NavLink to="/agent-monitoring" className={({ isActive }) => (isActive ? 'active' : '')}>
-                System Health
-              </NavLink>
-            )}
-          </nav>
-
-          <div className="shell-user">
-            {user && (
-              <div className="shell-patient-profile">
-                <span className="shell-avatar" aria-hidden="true">
-                  {userInitials}
-                </span>
-                <div className="shell-user-meta">
-                  <span className="shell-username">{user.username}</span>
-                  {user.is_staff && <span className="shell-role-tag">Care Staff</span>}
-                </div>
-              </div>
-            )}
-            <button className="btn btn-secondary btn-sm shell-logout-btn" onClick={handleLogout}>
-              Sign out
-            </button>
-          </div>
+            <Icon name="sparkle" size={18} />
+          </button>
+        </header>
+        <div className="topbar-emergency" role="note">
+          <Icon name="alert" size={13} strokeWidth={2.2} />
+          <span>Emergency? Call your local emergency number now.</span>
         </div>
-      </header>
 
-      <main className="shell-main">
-        <Outlet />
-      </main>
-
-      <footer className="shell-footer">
-        <div className="shell-footer-inner">
-          <div className="shell-footer-brand">
-            <strong>NaviCare Patient Care Portal</strong>
-            <span>Secure, source-attributed clinical care navigation and appointment scheduling.</span>
-          </div>
-          <div className="shell-footer-links">
-            <span>HIPAA-aligned Patient Privacy</span>
-            <span>•</span>
-            <span>Care Navigation v2.0</span>
-          </div>
-        </div>
-      </footer>
+        <main className={`shell-main ${isChat ? 'shell-main--flush' : ''}`}>
+          <Outlet />
+        </main>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { listNotifications, markNotificationRead } from '../api/notifications'
 import { extractErrorMessage } from '../api/client'
+import Icon from '../components/Icon'
 import './notifications.css'
 
 function timeAgo(isoString) {
@@ -16,10 +17,11 @@ function timeAgo(isoString) {
 
 function getNotificationIcon(title = '') {
   const lower = title.toLowerCase()
-  if (lower.includes('appointment') || lower.includes('visit') || lower.includes('schedule')) return '🗓️'
-  if (lower.includes('reminder') || lower.includes('alert')) return '⏰'
-  if (lower.includes('follow-up') || lower.includes('task')) return '📋'
-  return '🩺'
+  if (lower.includes('appointment') || lower.includes('visit') || lower.includes('schedule')) return 'calendar'
+  if (lower.includes('reminder') || lower.includes('alert')) return 'clock'
+  if (lower.includes('follow-up') || lower.includes('task')) return 'tasks'
+  if (lower.includes('support') || lower.includes('staff')) return 'headset'
+  return 'bell'
 }
 
 export default function Notifications() {
@@ -83,63 +85,65 @@ export default function Notifications() {
   const displayed = filter === 'unread' ? notifications.filter((n) => !n.read) : notifications
 
   return (
-    <div className="notifications-page">
-      <div className="page-header-row">
+    <div className="page notifications-page">
+      <header className="page-header">
         <div>
-          <h1>Care Notifications</h1>
-          <p className="dashboard-subtitle">
-            Automated alerts, appointment reminders, and follow-up notices from your care team.
-          </p>
+          <h1 className="page-title">Notifications</h1>
+          <p className="page-subtitle">Appointment reminders, follow-up notices and updates from your care team.</p>
         </div>
         {unreadCount > 0 && (
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={handleMarkAllRead}
-            disabled={markingAll}
-          >
-            {markingAll ? 'Updating…' : '✓ Mark All as Read'}
+          <button className="btn btn-secondary btn-sm" onClick={handleMarkAllRead} disabled={markingAll}>
+            <Icon name="check" size={15} />
+            {markingAll ? 'Updating…' : 'Mark all as read'}
           </button>
         )}
-      </div>
+      </header>
 
-      <div className="notifications-filter-bar">
-        <button
-          className={`filter-chip ${filter === 'all' ? 'active' : ''}`}
-          onClick={() => setFilter('all')}
-        >
-          All Notifications ({notifications.length})
+      <div className="segmented" role="group" aria-label="Filter notifications">
+        <button className={filter === 'all' ? 'active' : ''} aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>
+          All <span className="count">{notifications.length}</span>
         </button>
-        <button
-          className={`filter-chip ${filter === 'unread' ? 'active' : ''}`}
-          onClick={() => setFilter('unread')}
-        >
-          Unread Only ({unreadCount})
+        <button className={filter === 'unread' ? 'active' : ''} aria-pressed={filter === 'unread'} onClick={() => setFilter('unread')}>
+          Unread <span className="count">{unreadCount}</span>
         </button>
       </div>
 
-      {error && <div className="alert-error">{error}</div>}
-      {loading && <p className="dashboard-muted">Checking for care alerts…</p>}
+      {error && (
+        <div className="alert-error" role="alert">
+          <Icon name="info" size={16} />
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="skeleton-stack" aria-hidden="true">
+          <div className="skeleton" style={{ height: 72 }} />
+          <div className="skeleton" style={{ height: 72 }} />
+          <div className="skeleton" style={{ height: 72 }} />
+        </div>
+      )}
 
       {!loading && displayed.length === 0 && (
-        <div className="card empty-state">
-          <div className="empty-icon" aria-hidden="true">🔔</div>
-          <h3>No notifications</h3>
-          <p className="dashboard-muted">
-            {filter === 'unread' ? 'You have read all of your care notices.' : 'No notifications in your record.'}
+        <div className="empty-state">
+          <div className="empty-icon">
+            <Icon name="inbox" size={20} />
+          </div>
+          <h3>{filter === 'unread' ? "You're all caught up" : 'No notifications yet'}</h3>
+          <p>
+            {filter === 'unread'
+              ? 'You have read every notification.'
+              : 'Reminders and updates from your care team will show up here.'}
           </p>
         </div>
       )}
 
       {!loading && displayed.length > 0 && (
-        <ul className="notification-list">
+        <ul className="list-group notification-list">
           {displayed.map((notification) => (
-            <li
-              key={notification.id}
-              className={`card notification-card ${notification.read ? 'notification-read' : 'notification-unread'}`}
-            >
-              <div className="notification-icon-wrap" aria-hidden="true">
-                {getNotificationIcon(notification.title)}
-              </div>
+            <li key={notification.id} className={`notification-row ${notification.read ? 'is-read' : 'is-unread'}`}>
+              <span className="notification-icon">
+                <Icon name={getNotificationIcon(notification.title)} size={16} />
+              </span>
 
               <div className="notification-body">
                 <div className="notification-header">
@@ -151,7 +155,7 @@ export default function Notifications() {
 
               {!notification.read && (
                 <button
-                  className="btn btn-secondary btn-sm notif-read-btn"
+                  className="btn btn-ghost btn-sm notification-read-btn"
                   onClick={() => handleMarkRead(notification.id)}
                   title="Mark as read"
                 >
