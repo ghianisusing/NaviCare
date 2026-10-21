@@ -108,8 +108,31 @@ def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTu
     the fallback messages above rather than propagating to the view.
     """
     started_at = time.monotonic()
+    tracer = Tracer(conversation=conversation, patient=conversation.patient)
+    try:
+        return _handle_turn(
+            conversation=conversation, patient_message=patient_message, tracer=tracer, started_at=started_at
+        )
+    except Exception as exc:  # noqa: BLE001 — last-resort net: the patient always gets a safe reply
+        # Something outside the agent calls failed (pre-check, failure
+        # tracking, a database error...). Never leave the trace RUNNING.
+        logger.error("Navigator turn failed unexpectedly (%s)", type(exc).__name__, exc_info=True)
+        if tracer.trace.completed_at is None:
+            tracer.finish(status="failed", final_agent="navigator", error_type=classify_exception(exc))
+        agent_output = _fallback_output_for(exc, patient_message=patient_message)
+        return NavigatorTurnResult(
+            response_text=agent_output.response,
+            agent_output=agent_output,
+            latency_seconds=time.monotonic() - started_at,
+            succeeded=False,
+            display_urgency="emergency" if agent_output.urgency == "emergency" else "normal",
+            request_id=str(tracer.request_id),
+            final_agent="emergency" if agent_output.urgency == "emergency" else "navigator",
+        )
+
+
+def _handle_turn(*, conversation, patient_message: str, tracer: Tracer, started_at: float) -> NavigatorTurnResult:
     patient = conversation.patient
-    tracer = Tracer(conversation=conversation, patient=patient)
 
     # Deterministic emergency pre-check, before the Navigator Agent (or
     # any specialist) is even invoked. Per the Phase 3 principle "do not
@@ -182,6 +205,12 @@ def handle_patient_message(*, conversation, patient_message: str) -> NavigatorTu
         succeeded = False
         error_type = classify_exception(exc)
         logger.warning("Navigator agent failed (%s): %s", type(exc).__name__, exc)
+    except Exception as exc:  # noqa: BLE001 — a bug in a specialist agent must not crash the turn
+        agent_output = _fallback_output_for(exc, patient_message=patient_message)
+        route_result = RouteResult(response_text=agent_output.response, final_agent="navigator")
+        succeeded = False
+        error_type = classify_exception(exc)
+        logger.error("Navigator turn hit an unexpected error (%s)", type(exc).__name__, exc_info=True)
 
     route_result.response_text, route_result.escalation_id, succeeded = _apply_failure_tracking(
         conversation=conversation, succeeded=succeeded, route_result=route_result
@@ -354,16 +383,16 @@ def _human_handoff_output() -> AgentOutput:
     )
 
 
-def _fallback_output_for(exc: AgentError, *, patient_message: str) -> AgentOutput:
+def _fallback_output_for(exc: Exception, *, patient_message: str) -> AgentOutput:
     # Even on total agent failure, the deterministic safety check still
     # runs — an LLM outage must never suppress an emergency response.
     if safety.matches_emergency_pattern(patient_message):
         return _emergency_output()
 
     message = (
-        FALLBACK_INVALID_OUTPUT_RESPONSE
-        if isinstance(exc, InvalidAgentOutputError)
-        else FALLBACK_UNAVAILABLE_RESPONSE
+        FALLBACK_UNAVAILABLE_RESPONSE
+        if isinstance(exc, AgentError) and not isinstance(exc, InvalidAgentOutputError)
+        else FALLBACK_INVALID_OUTPUT_RESPONSE
     )
     return AgentOutput(
         intent="UNKNOWN",
@@ -412,5 +441,5 @@ def _maybe_update_summary(*, conversation, patient_message: str, response_text: 
         )
         conversation.summary = result.text.strip()[:1000]
         conversation.save(update_fields=["summary"])
-    except AgentError as exc:
+    except Exception as exc:  # noqa: BLE001 — best-effort; never fail the turn over a summary
         logger.warning("Summary update skipped after failure: %s", type(exc).__name__)
