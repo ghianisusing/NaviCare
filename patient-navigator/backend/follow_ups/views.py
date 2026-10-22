@@ -17,10 +17,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from appointments.models import Appointment
-from appointments.serializers import AppointmentSerializer
 from patients.models import Patient
 
-from .models import FollowUp, Reminder
+from .models import FollowUp
 from .serializers import (
     AppointmentReminderSerializer,
     FollowUpCreateSerializer,

@@ -24,7 +24,7 @@ from rest_framework.views import APIView
 
 from patients.models import Patient
 
-from .models import AgentAction, Appointment, Department, Provider
+from .models import AgentAction, Department
 from .serializers import (
     AgentActionSerializer,
     AppointmentCreateSerializer,
