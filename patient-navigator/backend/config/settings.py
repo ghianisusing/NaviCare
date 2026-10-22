@@ -126,6 +126,9 @@ USE_TZ = True
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Keeps the test suite offline — see config/test_runner.py.
+TEST_RUNNER = "config.test_runner.OfflineEmbeddingsTestRunner"
+
 # ---------------------------------------------------------------------------
 # Django REST Framework
 # ---------------------------------------------------------------------------

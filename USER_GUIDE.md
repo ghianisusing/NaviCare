@@ -196,8 +196,16 @@ Open `.env` and set at least:
 SECRET_KEY=any-long-random-string
 LLM_API_KEY=your-anthropic-api-key
 LLM_MODEL=claude-sonnet-4-6
+EMBEDDING_API_KEY=your-voyage-api-key   # for knowledge base search
 # Remove or comment out DATABASE_URL to use SQLite instead of Postgres
 ```
+
+Knowledge base search uses an embedding model to match questions by
+meaning. The default is [Voyage AI](https://www.voyageai.com/), which
+Anthropic recommends. You can set `EMBEDDING_PROVIDER=openai` with an
+OpenAI key instead. To run with no embedding key, set
+`EMBEDDING_PROVIDER=local`: search then only matches questions that
+share words with an article.
 
 Then set up the database and sample data:
 
@@ -245,7 +253,9 @@ python manage.py process_reminders
 |---|---|---|
 | `LLM_MODEL` | `claude-sonnet-4-6` | Which model the agents use |
 | `MAX_AGENT_FAILURES_BEFORE_ESCALATION` | `3` | Failures in a row before a chat goes to staff |
-| `KNOWLEDGE_MIN_SIMILARITY` | `0.15` | How close a knowledge base match must be; below this the Information Agent says "I don't have enough information" |
+| `EMBEDDING_PROVIDER` | `local` (`.env.example` sets `voyage`) | `voyage`, `openai`, or `local` (offline word matching). After changing this or `EMBEDDING_MODEL`, re-run `seed_knowledge_base` |
+| `EMBEDDING_MODEL` | `voyage-4` / `text-embedding-3-small` | Which embedding model to use |
+| `KNOWLEDGE_MIN_SIMILARITY` | depends on the model (voyage `0.4`, openai `0.3`, local `0.15`) | How close a knowledge base match must be; below this the Information Agent says "I don't have enough information". Leave blank unless you're tuning it |
 | `KNOWLEDGE_RETRIEVAL_TOP_K` | `3` | How many knowledge base passages to use per answer |
 | `HIGH_ESCALATION_TARGET_MINUTES` | `15` | Response-time target shown to staff for high-priority escalations |
 | `NORMAL_ESCALATION_TARGET_MINUTES` | `60` | Same, for normal priority |
