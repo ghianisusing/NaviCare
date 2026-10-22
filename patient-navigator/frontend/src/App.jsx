@@ -1,8 +1,8 @@
-import { Navigate, Route, BrowserRouter, Routes } from 'react-router-dom'
+import { Route, BrowserRouter, Routes } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import GuestRoute from './components/GuestRoute'
-import { AdminRoute, StaffRoute } from './components/RoleRoutes'
+import { AdminRoute, HomeRedirect, PatientRoute, StaffRoute } from './components/RoleRoutes'
 import AppShell from './components/AppShell'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -28,11 +28,14 @@ export default function App() {
 
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/follow-ups" element={<FollowUps />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/chat/:conversationId" element={<Chat />} />
+              {/* Patients only — staff are sent to their workspace */}
+              <Route element={<PatientRoute />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/follow-ups" element={<FollowUps />} />
+                <Route path="/notifications" element={<Notifications />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/chat/:conversationId" element={<Chat />} />
+              </Route>
 
               {/* Care coordinator (is_staff) only */}
               <Route element={<StaffRoute />}>
@@ -48,8 +51,8 @@ export default function App() {
             </Route>
           </Route>
 
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<HomeRedirect />} />
+          <Route path="*" element={<HomeRedirect />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

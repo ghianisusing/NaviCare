@@ -5,6 +5,7 @@ All secrets and environment-specific values are read from environment
 variables (see .env.example). Nothing sensitive is hardcoded here.
 """
 
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -103,6 +104,13 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
+
+# The default hasher is deliberately slow, which made the test suite take
+# ~10 minutes instead of ~30 seconds. Use a fast one only under
+# `manage.py test`; it never applies to a running server.
+TESTING = len(sys.argv) > 1 and sys.argv[1] == "test"
+if TESTING:
+    PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 # ---------------------------------------------------------------------------
 # Internationalization

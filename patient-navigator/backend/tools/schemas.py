@@ -10,7 +10,7 @@ before the handler ever runs.
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
 
 from .exceptions import InvalidToolArgumentsError
