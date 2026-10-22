@@ -207,6 +207,7 @@ python manage.py seed_safety_rules      # the triage safety rules (important!)
 python manage.py seed_knowledge_base    # articles the Information Agent answers from
 python manage.py seed_appointments      # sample providers and time slots
 python manage.py createsuperuser        # your admin account
+python manage.py seed_demo_users        # optional: test accounts per role (DEBUG only)
 python manage.py runserver
 ```
 
