@@ -46,6 +46,9 @@ class DocumentChunk(models.Model):
     content = models.TextField()
     chunk_index = models.PositiveIntegerField()
     embedding = models.JSONField(help_text="List of floats produced by knowledge/embeddings.py")
+    # Which model produced `embedding` (EmbeddingProvider.model_id).
+    # Retrieval only compares chunks from the current model.
+    embedding_model = models.CharField(max_length=100, default="", db_index=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 

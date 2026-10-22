@@ -17,7 +17,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from agents.core.exceptions import LLMUnavailableError
 from agents.core.llm import LLMMessage, get_llm_provider
+from knowledge.embeddings import EmbeddingError
 from knowledge.retrieval import RetrievedChunk, retrieve
 
 from .prompts import INFORMATION_SYSTEM_PROMPT, build_user_prompt
@@ -41,11 +43,16 @@ def run_information_agent(*, question: str) -> InformationResult:
     """Run one Information Agent turn.
 
     Raises `agents.core.exceptions.AgentError` subclasses if the LLM
-    call itself fails or returns unusable output — retrieval failures
-    are handled internally (empty results -> deterministic fallback,
-    never an exception) rather than propagating.
+    call itself fails or returns unusable output. Retrieval finding
+    nothing is handled here (deterministic "insufficient information"
+    reply); the embedding service being down is not — it's raised as
+    LLMUnavailableError so the patient gets the normal outage fallback
+    rather than a misleading "I don't have that information".
     """
-    chunks = retrieve(question)
+    try:
+        chunks = retrieve(question)
+    except EmbeddingError as exc:
+        raise LLMUnavailableError("Knowledge search is unavailable.") from exc
 
     if not chunks:
         return InformationResult(response=INSUFFICIENT_INFO_RESPONSE, has_sufficient_information=False, sources=[])
