@@ -94,7 +94,7 @@ export default function Profile() {
         </div>
       )}
 
-      <section className="profile-identity card">
+      <section className="profile-identity">
         <span className="profile-avatar" aria-hidden="true">{initials}</span>
         <div className="profile-identity-text">
           <span className="profile-name">{fullName}</span>
@@ -155,7 +155,7 @@ export default function Profile() {
         </form>
 
         <aside className="profile-aside">
-          <div className="card info-card">
+          <div className="info-card">
             <span className="info-card-icon">
               <Icon name="lock" size={17} />
             </span>
@@ -166,7 +166,7 @@ export default function Profile() {
             </p>
           </div>
 
-          <div className="card info-card">
+          <div className="info-card">
             <span className="info-card-icon">
               <Icon name="headset" size={17} />
             </span>

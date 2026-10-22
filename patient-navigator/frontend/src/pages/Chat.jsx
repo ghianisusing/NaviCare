@@ -13,22 +13,18 @@ const URGENCY_LABELS = {
 
 const QUICK_STARTERS = [
   {
-    icon: 'calendar',
     title: 'Schedule an appointment',
     prompt: 'Help me find and schedule an appointment with an available doctor this week.',
   },
   {
-    icon: 'flask',
     title: 'Prepare for a lab test',
     prompt: 'What instructions should I follow before having routine fasting blood work done?',
   },
   {
-    icon: 'tasks',
     title: 'Review my follow-ups',
     prompt: 'Can you check my pending care tasks and tell me what follow-ups I need to complete?',
   },
   {
-    icon: 'stethoscope',
     title: 'Find the right specialist',
     prompt: 'I have persistent lower back pain. What kind of specialist or clinic should I see?',
   },
@@ -51,15 +47,15 @@ function SlotOptions({ slots, onSelect, disabled }) {
   }
   return (
     <div className="chat-card-group">
-      <div className="chat-card-group-label">
-        <Icon name="calendar" size={14} /> Available openings
-      </div>
+      <div className="chat-card-group-label">Available openings</div>
       <div className="chat-slot-grid">
         {slots.map((slot, index) => (
           <div key={index} className="chat-slot">
-            <div className="chat-slot-time">{formatDateTime(slot.start_time)}</div>
-            <div className="chat-slot-provider">{slot.provider_name}</div>
-            <div className="chat-slot-department">{slot.department_name}</div>
+            <div className="chat-slot-time mono">{formatDateTime(slot.start_time)}</div>
+            <div className="chat-slot-who">
+              <div className="chat-slot-provider">{slot.provider_name}</div>
+              <div className="chat-slot-department">{slot.department_name}</div>
+            </div>
             <button
               className="btn btn-secondary btn-sm chat-slot-select"
               disabled={disabled}
@@ -67,7 +63,7 @@ function SlotOptions({ slots, onSelect, disabled }) {
                 onSelect(`Book the appointment with ${slot.provider_name} on ${formatDateTime(slot.start_time)}.`)
               }
             >
-              Choose this time
+              Choose
             </button>
           </div>
         ))}
@@ -84,13 +80,10 @@ function AppointmentList({ appointments }) {
     <ul className="chat-list">
       {appointments.map((appointment) => (
         <li key={appointment.id} className="chat-list-row">
-          <span className="chat-list-icon">
-            <Icon name="calendar" size={15} />
-          </span>
           <div className="chat-list-body">
             <div className="chat-list-title">{appointment.provider_name}</div>
             <div className="chat-list-meta">
-              {appointment.department_name} · {formatDateTime(appointment.start_time)}
+              {appointment.department_name} · <span className="mono">{formatDateTime(appointment.start_time)}</span>
             </div>
           </div>
           <span className="badge badge-success">{appointment.status}</span>
@@ -108,9 +101,6 @@ function FollowUpList({ followUps }) {
     <ul className="chat-list">
       {followUps.map((followUp) => (
         <li key={followUp.id} className="chat-list-row">
-          <span className="chat-list-icon">
-            <Icon name="tasks" size={15} />
-          </span>
           <div className="chat-list-body">
             <div className="chat-list-title">{followUp.title}</div>
             {followUp.due_at && <div className="chat-list-meta">Due {formatDateTime(followUp.due_at)}</div>}
@@ -130,9 +120,6 @@ function ReminderList({ reminders }) {
     <ul className="chat-list">
       {reminders.map((reminder) => (
         <li key={reminder.id} className="chat-list-row">
-          <span className="chat-list-icon">
-            <Icon name="bell" size={15} />
-          </span>
           <div className="chat-list-body">
             <div className="chat-list-title">{reminder.follow_up_title}</div>
             <div className="chat-list-meta">{formatDateTime(reminder.scheduled_for)}</div>
@@ -208,29 +195,20 @@ function MessageRich({ message, onQuickMessage, sending }) {
       {message.sources && message.sources.length > 0 && (
         <div className="chat-sources">
           <span className="chat-sources-label">Sources</span>
-          <div className="chat-source-list">
-            {message.sources.map((source, index) =>
-              source.source_url ? (
-                <a
-                  key={index}
-                  href={source.source_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="chat-source"
-                  title={source.source || source.title}
-                >
-                  <Icon name="book" size={12} />
-                  <span>{source.title}</span>
-                  <Icon name="externalLink" size={11} />
-                </a>
-              ) : (
-                <span key={index} className="chat-source" title={source.source || source.title}>
-                  <Icon name="book" size={12} />
-                  <span>{source.title}</span>
-                </span>
-              )
-            )}
-          </div>
+          <ol className="chat-source-list">
+            {message.sources.map((source, index) => (
+              <li key={index} title={source.source || source.title}>
+                {source.source_url ? (
+                  <a href={source.source_url} target="_blank" rel="noreferrer" className="chat-source">
+                    {source.title}
+                    <Icon name="externalLink" size={12} />
+                  </a>
+                ) : (
+                  <span className="chat-source">{source.title}</span>
+                )}
+              </li>
+            ))}
+          </ol>
         </div>
       )}
 
@@ -274,14 +252,11 @@ function Message({ message, onQuickMessage, sending }) {
 
   return (
     <div className={`msg msg-agent ${isStaff ? 'msg-staff' : ''}`}>
-      <span className={`msg-avatar ${isStaff ? 'staff' : 'ai'}`} aria-hidden="true">
-        <Icon name={isStaff ? 'headset' : 'sparkle'} size={15} />
-      </span>
       <div className="msg-content">
         <div className="msg-author">
           {isStaff ? (
             <>
-              Care Support <span className="badge badge-staff">Staff member</span>
+              Care team <span className="msg-author-note">a person, not the Navigator</span>
             </>
           ) : (
             'Navigator'
@@ -438,15 +413,9 @@ export default function Chat() {
         <button className="icon-btn" onClick={() => navigate('/dashboard')} aria-label="Back to home">
           <Icon name="arrowLeft" size={18} />
         </button>
-        <span className="msg-avatar ai chat-header-avatar" aria-hidden="true">
-          <Icon name="sparkle" size={16} />
-        </span>
         <div className="chat-header-info">
           <h1>{conversation?.title || 'New conversation'}</h1>
-          <p className="chat-status">
-            <span className="status-dot" aria-hidden="true" />
-            Patient Navigator · answers cite their sources
-          </p>
+          <p className="chat-status">With the Navigator · answers cite their sources</p>
         </div>
       </header>
 
@@ -473,10 +442,7 @@ export default function Chat() {
 
           {isEmpty && (
             <div className="chat-empty">
-              <span className="chat-empty-mark" aria-hidden="true">
-                <Icon name="sparkle" size={26} />
-              </span>
-              <h2>How can I help with your care today?</h2>
+              <h2>What can I help you with?</h2>
               <p>
                 I can explain tests and procedures, help you work out where to go for care, and book or manage your
                 appointments.
@@ -490,11 +456,11 @@ export default function Chat() {
                     onClick={() => sendComposed(starter.prompt)}
                     disabled={sending}
                   >
-                    <span className="chat-starter-icon">
-                      <Icon name={starter.icon} size={16} />
+                    <span className="chat-starter-text">
+                      <strong>{starter.title}</strong>
+                      <span>{starter.prompt}</span>
                     </span>
-                    <strong>{starter.title}</strong>
-                    <span>{starter.prompt}</span>
+                    <Icon name="arrowRight" size={16} className="chat-starter-arrow" />
                   </button>
                 ))}
               </div>
@@ -508,14 +474,15 @@ export default function Chat() {
 
           {sending && (
             <div className="msg msg-agent">
-              <span className="msg-avatar ai" aria-hidden="true">
-                <Icon name="sparkle" size={15} />
-              </span>
               <div className="msg-content">
-                <div className="chat-typing" role="status" aria-label="The Navigator is reviewing your request">
-                  <span />
-                  <span />
-                  <span />
+                <div className="msg-author">Navigator</div>
+                <div className="chat-typing" role="status">
+                  Looking into this
+                  <span className="chat-typing-dots" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
                 </div>
               </div>
             </div>
@@ -543,7 +510,7 @@ export default function Chat() {
             disabled={loading || sending || !draft.trim()}
             aria-label={sending ? 'Sending' : 'Send message'}
           >
-            <Icon name="arrowUp" size={18} strokeWidth={2.2} />
+            {sending ? 'Sending' : 'Send'}
           </button>
         </form>
         <p className="chat-disclaimer">

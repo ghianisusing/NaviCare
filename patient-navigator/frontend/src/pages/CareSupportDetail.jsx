@@ -196,7 +196,7 @@ export default function CareSupportDetail() {
                 <ul className="detail-list">
                   {summary.agent_actions.map((a, i) => (
                     <li key={i}>
-                      <Icon name="sparkle" size={14} />
+                      <Icon name="activity" size={14} />
                       <span>
                         <code>{a.tool_name}</code> · {a.status}
                       </span>

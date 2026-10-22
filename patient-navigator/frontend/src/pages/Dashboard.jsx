@@ -11,10 +11,10 @@ import Icon from '../components/Icon'
 import './dashboard.css'
 
 const SUGGESTIONS = [
-  { icon: 'calendar', label: 'Book an appointment', prompt: 'I would like to find and schedule an appointment.' },
-  { icon: 'flask', label: 'Prepare for a lab test', prompt: 'What instructions should I follow before having routine fasting blood work done?' },
-  { icon: 'tasks', label: 'Review my care tasks', prompt: 'Can you check my pending care tasks and tell me what follow-ups I need to complete?' },
-  { icon: 'stethoscope', label: 'Which specialist should I see?', prompt: 'I have a health concern and would like help working out which kind of specialist or clinic to see.' },
+  { label: 'Book an appointment', prompt: 'I would like to find and schedule an appointment.' },
+  { label: 'Prepare for a lab test', prompt: 'What instructions should I follow before having routine fasting blood work done?' },
+  { label: 'Review my care tasks', prompt: 'Can you check my pending care tasks and tell me what follow-ups I need to complete?' },
+  { label: 'Which specialist should I see?', prompt: 'I have a health concern and would like help working out which kind of specialist or clinic to see.' },
 ]
 
 function getGreeting() {
@@ -171,13 +171,31 @@ export default function Dashboard() {
   const nextAppointment = appointments[0]
   const nextVisit = nextAppointment ? parseAppointmentDate(nextAppointment.start_time) : null
 
+  const openTasks = followUps.length
+  const summary = (() => {
+    if (loading) return null
+    const visit = nextVisit
+      ? `Your next visit is ${nextVisit.short} at ${nextVisit.time} with ${nextAppointment.provider_name}.`
+      : 'You have no visits booked.'
+    const tasks =
+      openTasks === 0
+        ? 'Nothing on your care plan needs doing right now.'
+        : `${openTasks} ${openTasks === 1 ? 'task is' : 'tasks are'} waiting on your care plan.`
+    return `${visit} ${tasks}`
+  })()
+
   return (
     <div className="page dashboard">
       <header className="dashboard-header">
         <p className="page-eyebrow">{formatCurrentDate()}</p>
         <h1 className="page-title">
-          {getGreeting()}, {displayName}
+          {getGreeting()}, {displayName}.
         </h1>
+        {loading ? (
+          <span className="skeleton dashboard-summary-skeleton" aria-hidden="true" />
+        ) : (
+          <p className="dashboard-summary">{summary}</p>
+        )}
       </header>
 
       {error && (
@@ -188,66 +206,40 @@ export default function Dashboard() {
       )}
 
       {/* Ask the Navigator */}
-      <section className="ask-card" aria-label="Ask the Navigator">
+      <section className="ask" aria-labelledby="ask-heading">
         <form className="ask-form" onSubmit={handleAskSubmit}>
-          <span className="ask-icon">
-            <Icon name="sparkle" size={18} />
-          </span>
-          <label htmlFor="ask-input" className="sr-only">Ask the Navigator</label>
-          <input
-            id="ask-input"
-            type="text"
-            placeholder="Ask about symptoms, test prep, appointments…"
-            value={askDraft}
-            onChange={(e) => setAskDraft(e.target.value)}
-            disabled={startingChat}
-            autoComplete="off"
-          />
-          <button type="submit" className="ask-submit" disabled={startingChat} aria-label="Start conversation">
-            {startingChat ? <span className="ask-spinner" aria-hidden="true" /> : <Icon name="arrowUp" size={18} strokeWidth={2.2} />}
-          </button>
+          <label htmlFor="ask-input" id="ask-heading" className="ask-label">
+            Ask the Navigator
+            <span>Answers come from vetted sources and cite them. It can also book visits for you.</span>
+          </label>
+          <div className="ask-row">
+            <input
+              id="ask-input"
+              type="text"
+              placeholder="e.g. Do I need to fast before a blood test?"
+              value={askDraft}
+              onChange={(e) => setAskDraft(e.target.value)}
+              disabled={startingChat}
+              autoComplete="off"
+            />
+            <button type="submit" className="btn btn-primary ask-submit" disabled={startingChat}>
+              {startingChat ? 'Starting…' : 'Ask'}
+            </button>
+          </div>
         </form>
         <div className="ask-suggestions">
+          <span className="ask-suggestions-label">Or start with</span>
           {SUGGESTIONS.map((item) => (
             <button
               key={item.label}
               type="button"
-              className="suggestion-chip"
+              className="suggestion-link"
               onClick={() => handleStartChat(item.prompt)}
               disabled={startingChat}
             >
-              <Icon name={item.icon} size={15} />
               {item.label}
             </button>
           ))}
-        </div>
-      </section>
-
-      {/* At a glance */}
-      <section className="stat-grid" aria-label="At a glance">
-        <div className="stat-tile">
-          <span className="stat-label">
-            <Icon name="calendar" size={14} /> Next visit
-          </span>
-          {loading ? (
-            <span className="skeleton" style={{ height: 24, width: '70%' }} />
-          ) : (
-            <span className="stat-value small">
-              {nextVisit ? `${nextVisit.short} · ${nextVisit.time}` : 'Nothing booked'}
-            </span>
-          )}
-        </div>
-        <Link to="/follow-ups" className="stat-tile stat-tile-link">
-          <span className="stat-label">
-            <Icon name="tasks" size={14} /> Open care tasks
-          </span>
-          {loading ? <span className="skeleton" style={{ height: 30, width: 40 }} /> : <span className="stat-value">{followUps.length}</span>}
-        </Link>
-        <div className="stat-tile">
-          <span className="stat-label">
-            <Icon name="message" size={14} /> Conversations
-          </span>
-          {loading ? <span className="skeleton" style={{ height: 30, width: 40 }} /> : <span className="stat-value">{conversations.length}</span>}
         </div>
       </section>
 
@@ -255,13 +247,13 @@ export default function Dashboard() {
         {/* Appointments */}
         <section aria-labelledby="appointments-heading">
           <div className="section-header">
-            <h2 id="appointments-heading" className="section-title">Upcoming appointments</h2>
+            <h2 id="appointments-heading" className="section-title">Upcoming visits</h2>
             <button
               className="btn btn-secondary btn-sm"
               onClick={() => handleStartChat('I would like to find and schedule an appointment.')}
               disabled={startingChat}
             >
-              <Icon name="plus" size={15} /> Book visit
+              <Icon name="plus" size={15} /> Book a visit
             </button>
           </div>
 
@@ -276,7 +268,7 @@ export default function Dashboard() {
               <div className="empty-icon">
                 <Icon name="calendar" size={20} />
               </div>
-              <h3>No upcoming appointments</h3>
+              <h3>No visits booked</h3>
               <p>The Navigator can find an opening that suits you and book it for you.</p>
               <button
                 className="btn btn-primary btn-sm"
@@ -295,8 +287,8 @@ export default function Dashboard() {
                 return (
                   <li key={appointment.id} className="appointment-row">
                     <div className="date-block" aria-label={`Date: ${dateParts.full}`}>
-                      <span className="date-block-month">{dateParts.month}</span>
                       <span className="date-block-day">{dateParts.day}</span>
+                      <span className="date-block-month">{dateParts.month}</span>
                     </div>
 
                     <div className="appointment-body">
@@ -304,8 +296,8 @@ export default function Dashboard() {
                       <div className="appointment-meta">
                         <span>{appointment.department_name}</span>
                         <span className="dot-sep" aria-hidden="true" />
-                        <span>
-                          {dateParts.weekday}, {dateParts.time}
+                        <span className="mono">
+                          {dateParts.weekday} {dateParts.time}
                         </span>
                       </div>
                     </div>
@@ -351,9 +343,9 @@ export default function Dashboard() {
           {/* Care tasks */}
           <section aria-labelledby="tasks-heading">
             <div className="section-header">
-              <h2 id="tasks-heading" className="section-title">To do</h2>
+              <h2 id="tasks-heading" className="section-title">Care plan</h2>
               <Link to="/follow-ups" className="section-link">
-                View all <Icon name="chevronRight" size={14} />
+                See all <Icon name="chevronRight" size={14} />
               </Link>
             </div>
 
@@ -368,7 +360,7 @@ export default function Dashboard() {
                 <div className="empty-icon">
                   <Icon name="check" size={20} />
                 </div>
-                <h3>You're all caught up</h3>
+                <h3>Nothing to do right now</h3>
                 <p>New tasks from your care team will show up here.</p>
               </div>
             )}
@@ -392,7 +384,7 @@ export default function Dashboard() {
                       {task.due_at && (
                         <span className="task-due">
                           <Icon name="clock" size={12} />
-                          Due {new Date(task.due_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                          Due <span className="mono">{new Date(task.due_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                         </span>
                       )}
                     </div>
@@ -420,7 +412,7 @@ export default function Dashboard() {
                   <Icon name="message" size={20} />
                 </div>
                 <h3>No conversations yet</h3>
-                <p>Ask the Navigator anything to get started.</p>
+                <p>Questions you ask the Navigator are kept here.</p>
               </div>
             )}
 
@@ -429,9 +421,6 @@ export default function Dashboard() {
                 {conversations.slice(0, 4).map((conv) => (
                   <li key={conv.id}>
                     <button type="button" className="conversation-row" onClick={() => navigate(`/chat/${conv.id}`)}>
-                      <span className="conversation-icon">
-                        <Icon name="sparkle" size={15} />
-                      </span>
                       <span className="conversation-body">
                         <span className="conversation-title">{conv.title || 'Care conversation'}</span>
                         {conv.last_message && <span className="conversation-preview">{conv.last_message.content}</span>}

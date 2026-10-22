@@ -1,12 +1,6 @@
 // One consistent 24px stroke icon set, replacing emoji across the app.
 const PATHS = {
   home: <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />,
-  sparkle: (
-    <>
-      <path d="M11 3.5 12.9 8.6 18 10.5 12.9 12.4 11 17.5 9.1 12.4 4 10.5 9.1 8.6z" />
-      <path d="M18.5 15.5 19.3 17.2 21 18l-1.7.8-.8 1.7-.8-1.7L16 18l1.7-.8z" />
-    </>
-  ),
   tasks: (
     <>
       <rect x="5" y="4" width="14" height="17" rx="2" />
@@ -152,12 +146,8 @@ export default function Icon({ name, size = 18, strokeWidth = 1.8, className, st
 export function BrandMark({ size = 32 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-      <rect width="32" height="32" rx="9" fill="var(--color-primary)" />
-      <path
-        d="M16 7.5c-3.6 2.4-6.5 3.1-8.5 3.1v4.6c0 5.4 3.6 8.6 8.5 9.8 4.9-1.2 8.5-4.4 8.5-9.8v-4.6c-2 0-4.9-.7-8.5-3.1z"
-        fill="rgba(255,255,255,0.16)"
-      />
-      <path d="M16 12.2v8.2M11.9 16.3h8.2" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />
+      <rect width="32" height="32" rx="5" fill="var(--color-primary)" />
+      <path d="M16 9v14M9 16h14" stroke="#fdfcf9" strokeWidth="3.2" strokeLinecap="square" />
     </svg>
   )
 }

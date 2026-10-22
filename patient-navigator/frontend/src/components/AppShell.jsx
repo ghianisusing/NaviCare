@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { homePathFor, isStaffUser } from '../auth/roles'
 import { listNotifications } from '../api/notifications'
 import { createConversation } from '../api/conversations'
 import Icon, { BrandMark } from './Icon'
@@ -23,8 +24,12 @@ export default function AppShell() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [startingChat, setStartingChat] = useState(false)
+  const isStaff = isStaffUser(user)
+  const homePath = homePathFor(user)
 
   useEffect(() => {
+    // Notifications are patient reminders; staff have none.
+    if (isStaff) return undefined
     let cancelled = false
     async function loadUnread() {
       try {
@@ -40,7 +45,7 @@ export default function AppShell() {
       cancelled = true
       window.removeEventListener('notifications:updated', loadUnread)
     }
-  }, [location.pathname])
+  }, [location.pathname, isStaff])
 
   // Close the mobile drawer whenever the route changes.
   const [drawerPath, setDrawerPath] = useState(location.pathname)
@@ -76,15 +81,15 @@ export default function AppShell() {
   }
 
   const userInitials = user?.username ? user.username.slice(0, 2).toUpperCase() : 'PT'
-  const roleLabel = user?.is_superuser ? 'Administrator' : user?.is_staff ? 'Care staff' : 'Patient'
+  const roleLabel = user?.is_superuser ? 'Administrator' : user?.is_staff ? 'Care coordinator' : 'Patient'
   const isChat = location.pathname.startsWith('/chat/')
 
   return (
     <div className={`shell ${drawerOpen ? 'drawer-open' : ''}`}>
       <aside className="sidebar" id="primary-navigation" aria-label="Primary">
         <div className="sidebar-top">
-          <NavLink to="/dashboard" className="brand" aria-label="NaviCare home">
-            <BrandMark size={30} />
+          <NavLink to={homePath} className="brand" aria-label="NaviCare home">
+            <BrandMark size={24} />
             <span className="brand-title">NaviCare</span>
           </NavLink>
           <button
@@ -97,39 +102,38 @@ export default function AppShell() {
           </button>
         </div>
 
-        <button type="button" className="sidebar-cta" onClick={handleNewChat} disabled={startingChat}>
-          <span className="sidebar-cta-icon">
-            <Icon name="sparkle" size={16} />
-          </span>
-          {startingChat ? 'Starting…' : 'Ask the Navigator'}
-        </button>
+        {!isStaff && (
+          <button type="button" className="btn btn-primary btn-block sidebar-cta" onClick={handleNewChat} disabled={startingChat}>
+            <Icon name="plus" size={16} strokeWidth={2.2} />
+            {startingChat ? 'Starting…' : 'New conversation'}
+          </button>
+        )}
 
-        <nav className="sidebar-nav">
-          <NavItem to="/dashboard" icon="home">Home</NavItem>
-          <NavItem to="/follow-ups" icon="tasks">Care plan</NavItem>
-          <NavItem to="/notifications" icon="bell" badge={unreadCount}>Notifications</NavItem>
-          <NavItem to="/profile" icon="user">My record</NavItem>
-
-          {(user?.is_staff || user?.is_superuser) && (
-            <>
-              <div className="sidebar-section-label">Workspace</div>
-              {user?.is_staff && <NavItem to="/care-support" icon="headset">Care support</NavItem>}
-              {user?.is_superuser && <NavItem to="/agent-monitoring" icon="activity">System health</NavItem>}
-            </>
-          )}
-        </nav>
+        {isStaff ? (
+          <nav className="sidebar-nav">
+            <div className="sidebar-section-label">Staff workspace</div>
+            {user?.is_staff && <NavItem to="/care-support" icon="headset">Care support</NavItem>}
+            {user?.is_superuser && <NavItem to="/agent-monitoring" icon="activity">System health</NavItem>}
+          </nav>
+        ) : (
+          <nav className="sidebar-nav">
+            <NavItem to="/dashboard" icon="home">Home</NavItem>
+            <NavItem to="/follow-ups" icon="tasks">Care plan</NavItem>
+            <NavItem to="/notifications" icon="bell" badge={unreadCount}>Notifications</NavItem>
+            <NavItem to="/profile" icon="user">My record</NavItem>
+          </nav>
+        )}
 
         <div className="sidebar-bottom">
-          <div className="emergency-card" role="note">
-            <div className="emergency-card-title">
-              <Icon name="alert" size={15} strokeWidth={2} />
-              Medical emergency?
+          {!isStaff && (
+            <div className="emergency-card" role="note">
+              <div className="emergency-card-title">In an emergency</div>
+              <p>
+                For chest pain, trouble breathing or other life-threatening symptoms, call your local emergency number
+                or go to the nearest emergency department.
+              </p>
             </div>
-            <p>
-              For chest pain, trouble breathing or other life-threatening symptoms, call your local emergency number or
-              go to the nearest emergency department.
-            </p>
-          </div>
+          )}
 
           {user && (
             <div className="sidebar-user">
@@ -161,24 +165,31 @@ export default function AppShell() {
             <Icon name="menu" size={20} />
             {unreadCount > 0 && <span className="topbar-dot" aria-hidden="true" />}
           </button>
-          <NavLink to="/dashboard" className="brand" aria-label="NaviCare home">
-            <BrandMark size={26} />
+          <NavLink to={homePath} className="brand" aria-label="NaviCare home">
+            <BrandMark size={22} />
             <span className="brand-title">NaviCare</span>
           </NavLink>
-          <button
-            type="button"
-            className="icon-btn topbar-ai"
-            onClick={handleNewChat}
-            disabled={startingChat}
-            aria-label="Ask the Navigator"
-          >
-            <Icon name="sparkle" size={18} />
-          </button>
+          {isStaff ? (
+            // Keeps the brand centred where the patient app has its AI button.
+            <span className="icon-btn topbar-ai" aria-hidden="true" style={{ visibility: 'hidden' }} />
+          ) : (
+            <button
+              type="button"
+              className="icon-btn topbar-ai"
+              onClick={handleNewChat}
+              disabled={startingChat}
+              aria-label="New conversation"
+              title="New conversation"
+            >
+              <Icon name="plus" size={20} />
+            </button>
+          )}
         </header>
-        <div className="topbar-emergency" role="note">
-          <Icon name="alert" size={13} strokeWidth={2.2} />
-          <span>Emergency? Call your local emergency number now.</span>
-        </div>
+        {!isStaff && (
+          <div className="topbar-emergency" role="note">
+            <span>In an emergency, call your local emergency number.</span>
+          </div>
+        )}
 
         <main className={`shell-main ${isChat ? 'shell-main--flush' : ''}`}>
           <Outlet />

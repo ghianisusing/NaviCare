@@ -7,7 +7,7 @@
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 16px 18px;
+  padding: 18px 0;
 }
 
 .follow-up-row .task-check {
@@ -23,13 +23,12 @@
 }
 
 .follow-up-title {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
 }
 
 .follow-up-description {
-  font-size: 0.88rem;
+  font-size: 0.92rem;
   color: var(--color-ink-muted);
   line-height: 1.55;
 }
@@ -49,8 +48,8 @@
 .follow-up-due {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.8rem;
+  gap: 5px;
+  font-size: 0.84rem;
   color: var(--color-ink-muted);
 }
 

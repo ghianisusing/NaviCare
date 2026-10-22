@@ -2,7 +2,8 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 18px 20px;
+  padding: 4px 0 24px;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .profile-avatar {
@@ -12,10 +13,11 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary-dark) 100%);
-  color: #fff;
-  font-size: 1.1rem;
-  font-weight: 600;
+  background: var(--color-surface-sunken);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 500;
   letter-spacing: 0.02em;
 }
 
@@ -27,9 +29,10 @@
 }
 
 .profile-name {
-  font-size: 1.1rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
 .profile-email {
@@ -42,7 +45,7 @@
 .profile-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
-  gap: 20px;
+  gap: 40px;
   align-items: start;
 }
 
@@ -52,6 +55,10 @@
 
 .profile-card-header {
   padding: 20px 22px 0;
+}
+
+.profile-card-header h2 {
+  font-size: 1.3rem;
 }
 
 .profile-card-header .muted {
@@ -79,31 +86,32 @@
 .profile-aside {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  border-top: 1px solid var(--color-ink);
 }
 
+/* Side notes: plain ruled text, not boxed cards. */
 .info-card {
-  padding: 18px;
+  padding: 16px 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
 }
 
 .info-card-icon {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  margin-bottom: 12px;
-  border-radius: 10px;
-  background: var(--color-primary-tint);
-  color: var(--color-primary);
+  display: none;
 }
 
 .info-card h3 {
+  font-family: var(--font-body);
   font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0;
   margin-bottom: 4px;
 }
 
 .info-card p {
-  font-size: 0.86rem;
+  font-size: 0.9rem;
   color: var(--color-ink-muted);
   line-height: 1.55;
 }
