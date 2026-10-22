@@ -51,6 +51,8 @@ EMERGENCY_PATTERN_GROUPS: tuple[EmergencyPatternGroup, ...] = (
             r"\b(can'?t|cannot|difficulty|trouble)\s+breath",
             r"\bshort(ness)? of breath\b",
             r"\bnot breathing\b",
+            r"\b(having|had|have)\s+(a\s+)?heart attack\b",
+            r"\bchest\s+(hurts?|hurting|pressure|tightness|feels tight)\b",
         ),
     ),
     EmergencyPatternGroup(
@@ -80,6 +82,17 @@ EMERGENCY_PATTERN_GROUPS: tuple[EmergencyPatternGroup, ...] = (
             r"\b(suicid|kill myself|end my life)\w*\b",
             r"\bhurt(ing)?\s+myself\b",
             r"\boverdose\b",
+            r"\b((want|going|plan(ning)?)\s+to|wanna)\s+die\b",
+            r"\bend(ing)?\s+it\s+all\b",
+            r"\bending\s+my\s+life\b",
+            r"\b(don'?t|do not)\s+want\s+to\s+(live|be alive)\b",
+            r"\bbetter off dead\b",
+            r"\bself[- ]?harm\w*\b",
+            r"\bcut(ting)?\s+myself\b",
+            # Overdose phrasings are tied to took/swallowed so that
+            # "I took my pills this morning" doesn't trigger.
+            r"\b(took|taken|swallowed)\b[^.?!]{0,30}\b(whole|entire)\s+bottle\b",
+            r"\b(took|taken|swallowed)\b[^.?!]{0,20}\btoo many\b",
         ),
     ),
     EmergencyPatternGroup(
@@ -97,6 +110,15 @@ EMERGENCY_PATTERN_GROUPS: tuple[EmergencyPatternGroup, ...] = (
         patterns=(
             r"\banaphylax\w*\b",
             r"\ballergic reaction\b.*\b(throat|swelling|breath)\b",
+        ),
+    ),
+    EmergencyPatternGroup(
+        rule_name="Choking or turning blue",
+        category="cardiac_respiratory",
+        patterns=(
+            r"\bchok(e|es|ing)\b",
+            r"\bturning blue\b",
+            r"\b(lips|face|skin)\s+(is\s+|are\s+)?blue\b",
         ),
     ),
 )

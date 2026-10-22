@@ -61,3 +61,69 @@ class ConsistentDetectionTests(TestCase):
         for phrase in self.PREVIOUSLY_INCONSISTENT:
             with self.subTest(phrase=phrase):
                 self.assertEqual(validator.classify_message(phrase).severity, "emergency")
+
+
+class CrisisPhrasingRegressionTests(TestCase):
+    """Realistic crisis phrasings the deterministic check must always
+    catch, even with no DB rules and no LLM. Several of these were missed
+    before; add new misses here before widening the patterns."""
+
+    MUST_MATCH = [
+        "I want to die",
+        "honestly I just wanna die",
+        "thinking about ending it all",
+        "I'm going to end it all tonight",
+        "I don't want to live anymore",
+        "everyone would be better off dead without me",
+        "I've been self-harming again",
+        "I keep cutting myself",
+        "I took a whole bottle of pills",
+        "I swallowed way too many tablets",
+        "I think I am having a heart attack",
+        "my dad had a heart attack just now",
+        "my chest hurts really bad",
+        "there's a lot of pressure, my chest feels tight",
+        "im choking",
+        "my son is choking on a grape",
+        "my lips are turning blue",
+        "his face is blue",
+    ]
+
+    # Everyday messages that must stay on the normal path.
+    MUST_NOT_MATCH = [
+        "I took my pills this morning",
+        "I drank a whole bottle of water",
+        "I want to book an appointment",
+        "can I reschedule my follow-up?",
+        "what should I eat to lower my cholesterol",
+        "where can I get my chest x-ray results",
+        "I'm dying to know when my results come back",
+    ]
+
+    def test_crisis_phrases_match_baseline(self):
+        for phrase in self.MUST_MATCH:
+            with self.subTest(phrase=phrase):
+                self.assertTrue(baseline.matches_baseline_emergency(phrase))
+
+    def test_crisis_phrases_match_navigator_pre_check_without_db_rules(self):
+        self.assertFalse(SafetyRule.objects.exists())
+        for phrase in self.MUST_MATCH:
+            with self.subTest(phrase=phrase):
+                self.assertTrue(navigator_safety.matches_emergency_pattern(phrase))
+
+    def test_everyday_phrases_do_not_match(self):
+        for phrase in self.MUST_NOT_MATCH:
+            with self.subTest(phrase=phrase):
+                self.assertFalse(baseline.matches_baseline_emergency(phrase))
+
+    def test_llm_outage_fallback_still_returns_emergency_response(self):
+        from agents.core.exceptions import LLMUnavailableError
+        from agents.navigator import service as navigator_service
+
+        for phrase in self.MUST_MATCH:
+            with self.subTest(phrase=phrase):
+                output = navigator_service._fallback_output_for(
+                    LLMUnavailableError("down"), patient_message=phrase
+                )
+                self.assertEqual(output.urgency, "emergency")
+                self.assertEqual(output.response, baseline.EMERGENCY_RESPONSE)
