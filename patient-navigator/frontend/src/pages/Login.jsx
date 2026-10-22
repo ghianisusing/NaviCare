@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { extractErrorMessage } from '../api/client'
+import { homePathFor } from '../auth/roles'
 import AuthLayout from '../components/AuthLayout'
 import Icon from '../components/Icon'
 
@@ -20,8 +21,8 @@ export default function Login() {
     setError('')
     setSubmitting(true)
     try {
-      await login({ username, password })
-      const destination = location.state?.from?.pathname || '/dashboard'
+      const loggedInUser = await login({ username, password })
+      const destination = location.state?.from?.pathname || homePathFor(loggedInUser)
       navigate(destination, { replace: true })
     } catch (err) {
       setError(extractErrorMessage(err))
